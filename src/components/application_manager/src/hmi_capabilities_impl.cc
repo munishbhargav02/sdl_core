@@ -1774,11 +1774,16 @@ void HMICapabilitiesImpl::PrepareUiJsonValueForSaving(
                                       out_node);
   }
 
-  if (helpers::in_range(sections_to_update, strings::hmi_capabilities)) {
+  if (helpers::in_range(sections_to_update, strings::navigation)) {
     out_node[strings::hmi_capabilities][strings::navigation] =
         navigation_supported();
+  }
+
+  if (helpers::in_range(sections_to_update, strings::phone_call)) {
     out_node[strings::hmi_capabilities][strings::phone_call] =
         phone_call_supported();
+  }
+  if (helpers::in_range(sections_to_update, strings::video_streaming)) {
     out_node[strings::hmi_capabilities][strings::video_streaming] =
         video_streaming_supported();
   }

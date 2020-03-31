@@ -104,17 +104,19 @@ void UIGetCapabilitiesResponse::Run() {
   }
 
   if (msg_params.keyExists(strings::hmi_capabilities)) {
-    sections_to_update.push_back(strings::hmi_capabilities);
     if (msg_params[strings::hmi_capabilities].keyExists(strings::navigation)) {
+      sections_to_update.push_back(strings::navigation);
       hmi_capabilities_.set_navigation_supported(
           msg_params[strings::hmi_capabilities][strings::navigation].asBool());
     }
     if (msg_params[strings::hmi_capabilities].keyExists(strings::phone_call)) {
+      sections_to_update.push_back(strings::phone_call);
       hmi_capabilities_.set_phone_call_supported(
           msg_params[strings::hmi_capabilities][strings::phone_call].asBool());
     }
     if (msg_params[strings::hmi_capabilities].keyExists(
             strings::video_streaming)) {
+      sections_to_update.push_back(strings::video_streaming);
       hmi_capabilities_.set_video_streaming_supported(
           msg_params[strings::hmi_capabilities][strings::video_streaming]
               .asBool());
