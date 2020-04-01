@@ -1411,6 +1411,7 @@ std::shared_ptr<policy_table::Table> CacheManager::GenerateSnapshot() {
       pt_->policy_table.consumer_friendly_messages->version;
   snapshot_->policy_table.consumer_friendly_messages->mark_initialized();
   snapshot_->policy_table.module_config = pt_->policy_table.module_config;
+  snapshot_->policy_table.module_meta = pt_->policy_table.module_meta;
   snapshot_->policy_table.usage_and_error_counts =
       pt_->policy_table.usage_and_error_counts;
   snapshot_->policy_table.usage_and_error_counts->app_level =
