@@ -1768,10 +1768,19 @@ void HMICapabilitiesImpl::PrepareUiJsonValueForSaving(
 
   if (helpers::in_range(sections_to_update,
                         strings::audio_pass_thru_capabilities)) {
-    save_hmi_capability_field_to_json(strings::audio_pass_thru_capabilities,
-                                      schema,
-                                      audio_pass_thru_capabilities(),
-                                      out_node);
+    smart_objects::SmartObjectSPtr audio_pass_thru_capabilities_so =
+        audio_pass_thru_capabilities();
+
+    for (size_t i = 0; i < audio_pass_thru_capabilities_so->length(); ++i) {
+      const smart_objects::SmartObject& element =
+          (*audio_pass_thru_capabilities_so)[i];
+      const auto audio_pass_thru_capabilities =
+          std::make_shared<smart_objects::SmartObject>(element);
+      save_hmi_capability_field_to_json(strings::audio_pass_thru_capabilities,
+                                        schema,
+                                        audio_pass_thru_capabilities,
+                                        out_node);
+    }
   }
 
   if (helpers::in_range(sections_to_update, strings::navigation)) {
