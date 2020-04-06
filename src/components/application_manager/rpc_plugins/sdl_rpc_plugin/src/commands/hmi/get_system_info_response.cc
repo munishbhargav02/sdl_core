@@ -72,6 +72,7 @@ const SystemInfo GetSystemInfoResponse::GetSystemInfo(
 
   if (hmi_apis::Common_Result::SUCCESS != code) {
     LOG4CXX_WARN(logger_, "GetSystemError returns an error code " << code);
+    hmi_capabilities_.UpdateCachedCapabilities();
     return info;
   }
   info.ccpu_version =

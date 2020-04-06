@@ -542,6 +542,8 @@ class HMICapabilities {
    * @param ccpu_version Received system/hmi software version
    */
   virtual void OnSoftwareVersionReceived(const std::string& ccpu_version) = 0;
+
+  virtual void UpdateCachedCapabilities() = 0;
 };
 
 }  //  namespace application_manager
