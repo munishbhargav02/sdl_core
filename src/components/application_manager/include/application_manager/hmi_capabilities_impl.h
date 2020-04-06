@@ -248,6 +248,8 @@ class HMICapabilitiesImpl : public HMICapabilities {
 
   void OnSoftwareVersionReceived(const std::string& ccpu_version) OVERRIDE;
 
+  void UpdateCachedCapabilities() OVERRIDE;
+
  protected:
   /**
    * @brief Loads capabilities from local file in case SDL was launched

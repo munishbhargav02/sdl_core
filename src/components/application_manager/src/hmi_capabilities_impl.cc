@@ -1665,6 +1665,12 @@ void HMICapabilitiesImpl::OnSoftwareVersionReceived(
 
   LOG4CXX_DEBUG(logger_, "Software version changed");
   set_ccpu_version(ccpu_version);
+  UpdateCachedCapabilities();
+}
+
+void HMICapabilitiesImpl::UpdateCachedCapabilities() {
+  LOG4CXX_AUTO_TRACE(logger_);
+
   DeleteCachedCapabilitiesFile();
 
   if (!LoadCapabilitiesFromFile()) {

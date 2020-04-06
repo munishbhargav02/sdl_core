@@ -126,6 +126,7 @@ TEST_F(GetSystemInfoResponseTest, GetSystemInfo_UNSUCCESS) {
                   static_cast<hmi_apis::Common_Language::eType>(lang_code)))
       .Times(0);
 
+  EXPECT_CALL(mock_hmi_capabilities_, UpdateCachedCapabilities());
   EXPECT_CALL(mock_policy_handler_, OnGetSystemInfo("", "", ""));
 
   command->Run();
