@@ -167,13 +167,6 @@ add_custom_target(copy_policy_library ALL
     COMMENT "Copying library ${LIBRARY_NAME}"
 )
 
-install(TARGETS Policy
-  DESTINATION ${INSTALL_DESTINATION}
-  PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
-    GROUP_READ GROUP_EXECUTE
-    WORLD_READ WORLD_EXECUTE
-)
-
 if(BUILD_TESTS)
   add_subdirectory(test)
 endif()

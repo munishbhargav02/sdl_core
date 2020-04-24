@@ -255,6 +255,10 @@ else()
       GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 endif()
 
+SET(CPACK_GENERATOR "DEB")
+SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "KK") #required
+INCLUDE(CPack)
+
 if(BUILD_TESTS)
   add_subdirectory(test)
 endif()

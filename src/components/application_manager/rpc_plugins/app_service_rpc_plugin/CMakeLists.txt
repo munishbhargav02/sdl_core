@@ -73,10 +73,8 @@ add_library("app_service_rpc_plugin" SHARED "src/app_service_rpc_plugin.cc")
 target_link_libraries("app_service_rpc_plugin" app_service_rpc_plugin_static)
 
 
-set(INSTALL_DESTINATION bin)
-
 install(TARGETS app_service_rpc_plugin
-  DESTINATION ${INSTALL_DESTINATION}
+  DESTINATION ${INSTALL_LIB_DESTINATION}
   PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
     GROUP_READ GROUP_EXECUTE
     WORLD_READ WORLD_EXECUTE
