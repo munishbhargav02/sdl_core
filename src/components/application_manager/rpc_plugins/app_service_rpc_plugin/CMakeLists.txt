@@ -74,10 +74,12 @@ target_link_libraries("app_service_rpc_plugin" app_service_rpc_plugin_static)
 
 
 install(TARGETS app_service_rpc_plugin
+  LIBRARY
   DESTINATION ${INSTALL_LIB_DESTINATION}
   PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
     GROUP_READ GROUP_EXECUTE
     WORLD_READ WORLD_EXECUTE
+    COMPONENT SDL
 )
 
 if(BUILD_TESTS)
