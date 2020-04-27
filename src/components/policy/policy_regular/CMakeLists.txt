@@ -150,14 +150,17 @@ target_link_libraries(PolicyStatic ${LIBRARIES})
 add_library(Policy SHARED "src/policy_manager_impl.cc")
 target_link_libraries(Policy PolicyStatic)
 
+# Install rules
+install(TARGETS Policy
+        RUNTIME
+        DESTINATION ${INSTALL_LIB_DESTINATION}
+        COMPONENT SDL)
+
+
 if(ENABLE_LOG)
   target_link_libraries(Policy log4cxx -L${LOG4CXX_LIBS_DIRECTORY})
 endif()
 
-set(LIBRARY_NAME ${CMAKE_SHARED_LIBRARY_PREFIX}Policy${CMAKE_SHARED_LIBRARY_SUFFIX})
-set(TARGET_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/${LIBRARY_NAME})
-set(INSTALL_DESTINATION bin)
-set(COPY_DESTINATION ${CMAKE_BINARY_DIR}/src/appMain)
 
 if(BUILD_TESTS)
   add_subdirectory(test)
