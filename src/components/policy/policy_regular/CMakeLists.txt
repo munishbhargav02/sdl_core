@@ -152,10 +152,13 @@ target_link_libraries(Policy PolicyStatic)
 
 # Install rules
 install(TARGETS Policy
-        RUNTIME
+        LIBRARY
         DESTINATION ${INSTALL_LIB_DESTINATION}
-        COMPONENT SDL)
-
+        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+          GROUP_READ GROUP_EXECUTE
+          WORLD_READ WORLD_EXECUTE
+        COMPONENT SDL
+)
 
 if(ENABLE_LOG)
   target_link_libraries(Policy log4cxx -L${LOG4CXX_LIBS_DIRECTORY})
