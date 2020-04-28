@@ -178,7 +178,8 @@ TEST_F(SetInteriorVehicleDataRequestTest,
           HMIResultCodeIs(hmi_apis::FunctionID::RC_SetInteriorVehicleData), _))
       .WillOnce(Return(true));
   // Act
-  auto command = CreateRCCommand<SetInteriorVehicleDataRequest>(mobile_message);
+  const auto command =
+      CreateRCCommand<SetInteriorVehicleDataRequest>(mobile_message);
   ASSERT_TRUE(command->Init());
   command->Run();
 
@@ -217,7 +218,8 @@ TEST_F(
       .WillOnce(Return(true));
 
   // Act
-  auto command = CreateRCCommand<SetInteriorVehicleDataRequest>(mobile_message);
+  const auto command =
+      CreateRCCommand<SetInteriorVehicleDataRequest>(mobile_message);
   ASSERT_TRUE(command->Init());
   command->Run();
 
