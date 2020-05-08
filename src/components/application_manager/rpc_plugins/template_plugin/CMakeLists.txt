@@ -12,7 +12,7 @@
 # disclaimer in the documentation and/or other materials provided with the
 # distribution.
 #
-# Neither the name of the Ford Motor Company nor the names of its contributors
+# Neither the name of the copyright holders nor the names of their contributors
 # may be used to endorse or promote products derived from this software
 # without specific prior written permission.
 #
@@ -28,9 +28,57 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-# --- Utils
-add_subdirectory(vehicle_info_plugin)
-add_subdirectory(sdl_rpc_plugin)
-add_subdirectory(rc_rpc_plugin)
-add_subdirectory(app_service_rpc_plugin)
-add_subdirectory(template_plugin)
+include_directories(include)
+
+#set (COMMANDS_SOURCE_DIR
+#  ${CMAKE_CURRENT_SOURCE_DIR}/src/commands
+#)
+
+set (MOBILE_COMMANDS_SOURCE_DIR
+  ${COMMANDS_SOURCE_DIR}/mobile
+)
+
+#set (HMI_COMMANDS_SOURCE_DIR
+#  ${COMMANDS_SOURCE_DIR}/hmi
+#)
+
+set (EXTENSIONS_SOURCE_DIR
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/extensions
+)
+collect_sources(MOBILE_COMMANDS "${MOBILE_COMMANDS_SOURCE_DIR}")
+#collect_sources(HMI_COMMANDS "${HMI_COMMANDS_SOURCE_DIR}")
+#collect_sources(APP_EXTENSIONS "${EXTENSIONS_SOURCE_DIR}")
+collect_sources(TEMPLATE_PLUGIN_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src")
+
+set(LIBRARIES
+  ApplicationManager
+  HMI_API
+  MOBILE_API
+  MessageHelper
+  connectionHandler
+  v4_protocol_v1_2_no_extra
+  SmartObjects
+  Utils
+  PolicyStatic
+  jsoncpp
+)
+
+if(ENABLE_LOG)
+  list(APPEND LIBRARIES log4cxx -L${LOG4CXX_LIBS_DIRECTORY})
+endif()
+
+add_library("template_plugin_static" ${TEMPLATE_PLUGIN_SOURCES} ${MOBILE_COMMANDS})
+target_link_libraries("template_plugin_static" ${LIBRARIES})
+
+add_library("template_plugin" SHARED "src/template_plugin.cc")
+target_link_libraries("template_plugin" template_plugin_static)
+
+set(INSTALL_DESTINATION bin)
+
+install(TARGETS template_plugin
+  DESTINATION ${INSTALL_DESTINATION}
+  PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+    GROUP_READ GROUP_EXECUTE
+    WORLD_READ WORLD_EXECUTE
+)
+

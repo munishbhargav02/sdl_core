@@ -94,7 +94,8 @@ bool RCRPCPlugin::Init(application_manager::ApplicationManager&,
 bool RCRPCPlugin::IsAbleToProcess(
     const int32_t function_id,
     const application_manager::commands::Command::CommandSource
-        message_source) {
+        message_source,
+    const utils::SemanticVersion& msg_version) {
   return command_factory_->IsAbleToProcess(function_id, message_source);
 }
 

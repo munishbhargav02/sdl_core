@@ -68,9 +68,8 @@ class RPCPluginManagerImpl : public RPCPluginManager {
 
   uint32_t LoadPlugins(const std::string& plugins_path) OVERRIDE;
 
-  utils::Optional<RPCPlugin> FindPluginToProcess(
-      const int32_t function_id,
-      const commands::Command::CommandSource message_source) OVERRIDE;
+  utils::Optional<RPCPlugin> FindPluginToProcess(const int32_t function_id,
+      const commands::Command::CommandSource message_source, const utils::SemanticVersion &msg_version) OVERRIDE;
 
  private:
   RPCPluginPtr LoadPlugin(const std::string& full_plugin_path) const;

@@ -56,9 +56,8 @@ class AppServiceRpcPlugin : public plugins::RPCPlugin {
             policy::PolicyHandlerInterface& policy_handler,
             resumption::LastState& last_state);
 
-  bool IsAbleToProcess(
-      const int32_t function_id,
-      const app_mngr::commands::Command::CommandSource source) OVERRIDE;
+  bool IsAbleToProcess(const int32_t function_id,
+      const app_mngr::commands::Command::CommandSource source, const utils::SemanticVersion &msg_version) OVERRIDE;
 
   std::string PluginName() OVERRIDE;
   app_mngr::CommandFactory& GetCommandFactory() OVERRIDE;

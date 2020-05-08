@@ -30,8 +30,8 @@
  POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef SRC_COMPONENTS_APPLICATION_MANAGER_RPC_PLUGINS_SDL_RPC_PLUGIN_INCLUDE_SDL_RPC_PLUGIN_SDL_RPC_PLUGIN_H
-#define SRC_COMPONENTS_APPLICATION_MANAGER_RPC_PLUGINS_SDL_RPC_PLUGIN_INCLUDE_SDL_RPC_PLUGIN_SDL_RPC_PLUGIN_H
+#ifndef SRC_COMPONENTS_APPLICATION_MANAGER_RPC_PLUGINS_TEMPLATE_PLUGIN_INCLUDE_TEMPLATE_PLUGIN_H
+#define SRC_COMPONENTS_APPLICATION_MANAGER_RPC_PLUGINS_TEMPLATE_PLUGIN_INCLUDE_TEMPLATE_PLUGIN_H
 #include "application_manager/command_factory.h"
 #include "application_manager/plugin_manager/rpc_plugin.h"
 
@@ -41,7 +41,7 @@ namespace plugins = application_manager::plugin_manager;
 
 class SystemCapabilityAppExtension;
 
-class SDLRPCPlugin : public plugins::RPCPlugin {
+class TemplatePlugin : public plugins::RPCPlugin {
   // RPCPlugin interface
  public:
   bool Init(app_mngr::ApplicationManager& app_manager,
@@ -51,16 +51,18 @@ class SDLRPCPlugin : public plugins::RPCPlugin {
             resumption::LastStateWrapperPtr last_state) OVERRIDE;
 
   DEPRECATED
-  bool Init(app_mngr::ApplicationManager& app_manager,
-            app_mngr::rpc_service::RPCService& rpc_service,
-            app_mngr::HMICapabilities& hmi_capabilities,
-            policy::PolicyHandlerInterface& policy_handler,
-            resumption::LastState& last_state) OVERRIDE;
+  bool Init(
+      application_manager::ApplicationManager& app_manager,
+      application_manager::rpc_service::RPCService& rpc_service,
+      application_manager::HMICapabilities& hmi_capabilities,
+      policy::PolicyHandlerInterface& policy_handler,
+      resumption::LastState& last_state);
 
   bool IsAbleToProcess(
       const int32_t function_id,
       const app_mngr::commands::Command::CommandSource message_source,
       const utils::SemanticVersion& msg_version) OVERRIDE;
+
   std::string PluginName() OVERRIDE;
 
   app_mngr::CommandFactory& GetCommandFactory() OVERRIDE;
@@ -77,4 +79,4 @@ class SDLRPCPlugin : public plugins::RPCPlugin {
 
 extern "C" application_manager::plugin_manager::RPCPlugin* Create();
 extern "C" void Delete(application_manager::plugin_manager::RPCPlugin* data);
-#endif  // SRC_COMPONENTS_APPLICATION_MANAGER_RPC_PLUGINS_SDL_RPC_PLUGIN_INCLUDE_SDL_RPC_PLUGIN_SDL_RPC_PLUGIN_H
+#endif  // SRC_COMPONENTS_APPLICATION_MANAGER_RPC_PLUGINS_TEMPLATE_PLUGIN_INCLUDE_TEMPLATE_PLUGIN_H

@@ -74,9 +74,8 @@ class RCRPCPlugin : public plugins::RPCPlugin {
    * @param CommandSource source
    * @return return true if command can be create, else return false
    **/
-  bool IsAbleToProcess(
-      const int32_t function_id,
-      const app_mngr::commands::Command::CommandSource message_source) OVERRIDE;
+  bool IsAbleToProcess(const int32_t function_id,
+      const app_mngr::commands::Command::CommandSource message_source, const utils::SemanticVersion &msg_version) OVERRIDE;
   /**
    * @brief PluginName plugin name
    * @return plugin name

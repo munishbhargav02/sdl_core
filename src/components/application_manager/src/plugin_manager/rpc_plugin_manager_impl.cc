@@ -114,10 +114,12 @@ uint32_t RPCPluginManagerImpl::LoadPlugins(const std::string& plugins_path) {
 
 utils::Optional<RPCPlugin> RPCPluginManagerImpl::FindPluginToProcess(
     const int32_t function_id,
-    const commands::Command::CommandSource message_source) {
+    const commands::Command::CommandSource message_source,
+    const utils::SemanticVersion &msg_version
+    ) {
   typedef utils::Optional<RPCPlugin> PluginOptional;
   for (auto& plugin : loaded_plugins_) {
-    if (plugin->IsAbleToProcess(function_id, message_source)) {
+    if (plugin->IsAbleToProcess(function_id, message_source, msg_version)) {
       return PluginOptional(*plugin);
     }
   }

@@ -67,7 +67,8 @@ class RPCPluginManager {
    */
   virtual utils::Optional<RPCPlugin> FindPluginToProcess(
       const int32_t function_id,
-      const commands::Command::CommandSource message_source) = 0;
+      const commands::Command::CommandSource message_source,
+       const utils::SemanticVersion& msg_version) = 0;
 
   /**
    * @brief OnPolicyEvent Notifies modules on certain events from policy

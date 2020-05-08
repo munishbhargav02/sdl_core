@@ -188,8 +188,22 @@ bool RPCServiceImpl::ManageMobileCommand(
 #endif  // ENABLE_SECURITY
   }
 
+
+  uint16_t major =
+      (*message)[strings::msg_params][strings::sync_msg_version][strings::major_version].asUInt();
+  uint16_t minor =
+      (*message)[strings::msg_params][strings::sync_msg_version][strings::minor_version].asUInt();
+  uint16_t patch = 0;
+  // Check if patch exists since it is not mandatory.
+  if ((*message)[strings::msg_params][strings::sync_msg_version].keyExists(strings::patch_version)) {
+    patch =
+        (*message)[strings::msg_params][strings::sync_msg_version][strings::patch_version].asUInt();
+  }
+
+  utils::SemanticVersion mobile_version(major, minor, patch);
+
   auto plugin =
-      app_manager_.GetPluginManager().FindPluginToProcess(function_id, source);
+      app_manager_.GetPluginManager().FindPluginToProcess(function_id, source, mobile_version);
   if (!plugin) {
     LOG4CXX_WARN(logger_, "Failed to find plugin : " << plugin.error());
     CheckSourceForUnsupportedRequest(message, source);
@@ -342,7 +356,7 @@ bool RPCServiceImpl::ManageHMICommand(const commands::MessageSharedPtr message,
   const int32_t function_id =
       (*(message.get()))[strings::params][strings::function_id].asInt();
   auto plugin =
-      app_manager_.GetPluginManager().FindPluginToProcess(function_id, source);
+      app_manager_.GetPluginManager().FindPluginToProcess(function_id, source, utils::rpc_version_5);
   if (!plugin) {
     LOG4CXX_WARN(logger_, "Filed to find plugin : " << plugin.error());
     return false;
@@ -677,7 +691,7 @@ bool RPCServiceImpl::IsAppServiceRPC(int32_t function_id,
 
   // RPCs handled by app services plugin
   auto plugin =
-      app_manager_.GetPluginManager().FindPluginToProcess(function_id, source);
+      app_manager_.GetPluginManager().FindPluginToProcess(function_id, source, utils::rpc_version_5);
   if (!plugin) {
     return false;
   }

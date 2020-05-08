@@ -71,7 +71,8 @@ bool AppServiceRpcPlugin::Init(app_mngr::ApplicationManager& app_manager,
 }
 
 bool AppServiceRpcPlugin::IsAbleToProcess(
-    const int32_t function_id, const commands::Command::CommandSource source) {
+    const int32_t function_id, const commands::Command::CommandSource source,
+        const utils::SemanticVersion& msg_version) {
   return command_factory_->IsAbleToProcess(function_id, source);
 }
 

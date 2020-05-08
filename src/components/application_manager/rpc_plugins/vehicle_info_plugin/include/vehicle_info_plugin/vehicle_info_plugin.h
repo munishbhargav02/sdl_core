@@ -60,7 +60,7 @@ class VehicleInfoPlugin : public plugins::RPCPlugin {
 
   bool IsAbleToProcess(
       const int32_t function_id,
-      const app_mngr::commands::Command::CommandSource source) OVERRIDE;
+      const app_mngr::commands::Command::CommandSource source, const utils::SemanticVersion &msg_version) OVERRIDE;
 
   std::string PluginName() OVERRIDE;
   app_mngr::CommandFactory& GetCommandFactory() OVERRIDE;
