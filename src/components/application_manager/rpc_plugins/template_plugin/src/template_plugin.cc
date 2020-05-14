@@ -70,10 +70,12 @@ bool TemplatePlugin::IsAbleToProcess(
     const int32_t function_id,
     const app_mngr::commands::Command::CommandSource message_source,
     const utils::SemanticVersion& msg_version) {
-  if (msg_version == utils::SemanticVersion("7.0.0"))
+
+  if (msg_version == utils::SemanticVersion("7.0.0")) {
     return command_factory_->IsAbleToProcess(function_id, message_source);
-  else
-    return false;
+  }
+
+  return false;
 }
 
 std::string TemplatePlugin::PluginName() {

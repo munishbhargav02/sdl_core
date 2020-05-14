@@ -54,6 +54,40 @@ CommandCreator& MobileCommandFactory::get_command_creator(
   return factory.GetCreator<InvalidCommand>();
 }
 
+CommandCreator& MobileCommandFactory::get_creator_factory(
+    const mobile_apis::FunctionID::eType id,
+    const mobile_apis::messageType::eType message_type,
+    const app_mngr::commands::Command::CommandSource source) const {
+  switch (message_type) {
+    case mobile_api::messageType::request: {
+      if (app_mngr::commands::Command::CommandSource::SOURCE_MOBILE == source) {
+        return get_command_creator(id, message_type);
+      }
+      break;
+    }
+    case mobile_api::messageType::response: {
+      if (app_mngr::commands::Command::CommandSource::SOURCE_SDL == source) {
+        return get_command_creator(id, message_type);
+      }
+      break;
+    }
+    case mobile_api::messageType::notification: {
+      if (app_mngr::commands::Command::CommandSource::SOURCE_SDL == source) {
+        return get_notification_creator(id);
+      } else if (app_mngr::commands::Command::CommandSource::SOURCE_MOBILE ==
+                 source) {
+        return get_notification_from_mobile_creator(id);
+      }
+      break;
+    }
+    default: {}
+  }
+  CommandCreatorFactory factory(
+      application_manager_, rpc_service_, hmi_capabilities_, policy_handler_);
+  return factory.GetCreator<InvalidCommand>();
+}
+
+
 MobileCommandFactory::MobileCommandFactory(
     ApplicationManager& application_manager,
     rpc_service::RPCService& rpc_service,

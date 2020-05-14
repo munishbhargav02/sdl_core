@@ -189,15 +189,21 @@ bool RPCServiceImpl::ManageMobileCommand(
   }
 
 
-  uint16_t major =
-      (*message)[strings::msg_params][strings::sync_msg_version][strings::major_version].asUInt();
-  uint16_t minor =
-      (*message)[strings::msg_params][strings::sync_msg_version][strings::minor_version].asUInt();
+  uint16_t major = 6;
+  uint16_t minor = 0;
   uint16_t patch = 0;
-  // Check if patch exists since it is not mandatory.
-  if ((*message)[strings::msg_params][strings::sync_msg_version].keyExists(strings::patch_version)) {
-    patch =
-        (*message)[strings::msg_params][strings::sync_msg_version][strings::patch_version].asUInt();
+
+  if ((*message)[strings::msg_params].keyExists(strings::sync_msg_version)) {
+      major =
+          (*message)[strings::msg_params][strings::sync_msg_version][strings::major_version].asUInt();
+      minor =
+          (*message)[strings::msg_params][strings::sync_msg_version][strings::minor_version].asUInt();
+      patch = 0;
+      // Check if patch exists since it is not mandatory.
+      if ((*message)[strings::msg_params][strings::sync_msg_version].keyExists(strings::patch_version)) {
+        patch =
+            (*message)[strings::msg_params][strings::sync_msg_version][strings::patch_version].asUInt();
+      }
   }
 
   utils::SemanticVersion mobile_version(major, minor, patch);
