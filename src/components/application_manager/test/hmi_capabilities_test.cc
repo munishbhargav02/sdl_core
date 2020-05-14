@@ -344,6 +344,7 @@ class HMICapabilitiesTest : public ::testing::Test {
 
 TEST_F(HMICapabilitiesTest,
        Init_CheckActiveLanguages_SuccesSetupDefaultLanguages) {
+  SetUpLanguageAndLightCapabilitiesExpectation();
   hmi_capabilities_->Init(last_state_wrapper_);
 
   EXPECT_EQ(hmi_apis::Common_Language::EN_US,
