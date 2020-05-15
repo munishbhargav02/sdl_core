@@ -1287,7 +1287,6 @@ Json::Value ModuleMeta::ToJsonValue() const {
   impl::WriteJsonField("ignition_cycles_since_last_exchange",
                        ignition_cycles_since_last_exchange,
                        &result__);
-  impl::WriteJsonField("ccpu_version", ccpu_version, &result__);
   return result__;
 }
 
