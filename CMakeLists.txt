@@ -247,7 +247,7 @@ set(INSTALL_LIB_DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)
 set(INSTALL_BIN_DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
 
 set(EXCLUDE_ERROR_FLAGS "-Wno-error=unused-variable -Wno-error=unused-but-set-variable -Wno-error=deprecated-declarations")
-set(CMAKE_CXX_FLAGS "-fPIC -std=gnu++0x -Wall -fvisibility=hidden -Werror ${EXCLUDE_ERROR_FLAGS} -Wuninitialized -Wvla")
+set(CMAKE_CXX_FLAGS "-fPIC -std=gnu++0x -fvisibility=hidden -Wvla")
 
 if (USE_GOLD_LD)
   execute_process(COMMAND ld -v OUTPUT_VARIABLE result)

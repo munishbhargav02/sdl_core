@@ -252,7 +252,7 @@ install(
 
 SET(CPACK_GENERATOR "DEB")
 set(CPACK_DEB_COMPONENT_INSTALL ON)
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "libbluetooth3,libusb-1.0-0,libssl1.0-dev,libsqlite3-0,libexpat1-dev,libicu60")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libbluetooth3,libusb-1.0-0,libssl-dev,libsqlite3-0,libexpat1-dev,libicu63")
 set(CPACK_ARCHIVE_COMPONENT_INSTALL ON)
 set(CPACK_COMPONENTS_ALL SDL)
 SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "Alexander Kutsan <akutsan@luxoft.com>") #required
