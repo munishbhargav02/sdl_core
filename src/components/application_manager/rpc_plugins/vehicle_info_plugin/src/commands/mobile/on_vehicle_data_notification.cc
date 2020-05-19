@@ -101,12 +101,37 @@ void OnVehicleDataNotification::Run() {
     }
   }
 
-  LOG4CXX_DEBUG(logger_,
-                "Number of Notifications to be send: " << notify_apps.size());
-
   for (size_t idx = 0; idx < notify_apps.size(); idx++) {
+    CommandParametersPermissions params_permissions;
+    application_manager_.CheckPolicyPermissions(
+        notify_apps[idx],
+        window_id(),
+        MessageHelper::StringifiedFunctionID(
+            mobile_api::FunctionID::OnVehicleDataID),
+        appSO[idx].enumerate(),
+        &params_permissions);
+
+    for (const auto& param : appSO[idx].enumerate()) {
+      const auto& allowed_params = params_permissions.allowed_params;
+      auto param_allowed = allowed_params.find(param);
+      if (allowed_params.end() == param_allowed) {
+        LOG4CXX_DEBUG(logger_,
+                      "Param " << param << " is not allowed by policy for app "
+                               << notify_apps[idx]->app_id()
+                               << ". It will be ignored.");
+        appSO[idx].erase(param);
+      }
+    }
+
+    if (appSO[idx].empty()) {
+      LOG4CXX_DEBUG(logger_,
+                    "App " << notify_apps[idx]->app_id()
+                           << " will be skipped: there is nothing to notify.");
+      continue;
+    }
+
     LOG4CXX_INFO(logger_,
-                 "Send OnVehicleData PRNDL notification to "
+                 "Send OnVehicleData notification to "
                      << notify_apps[idx]->name().c_str() << " application id "
                      << notify_apps[idx]->app_id());
     (*message_)[strings::params][strings::connection_key] =
