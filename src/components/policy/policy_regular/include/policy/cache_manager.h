@@ -900,7 +900,8 @@ class CacheManager : public CacheManagerInterface {
    * @brief Checks snapshot initialization and initializes to default values, if
    * necessary
    */
-  void CheckSnapshotInitialization();
+  void CheckSnapshotInitialization(
+      std::shared_ptr<policy_table::Table>& snapshot);
 
   /**
    * @brief Calculates difference between two provided custom vehicle data items
@@ -941,7 +942,6 @@ class CacheManager : public CacheManagerInterface {
 
  private:
   std::shared_ptr<policy_table::Table> pt_;
-  std::shared_ptr<policy_table::Table> snapshot_;
   std::shared_ptr<PTRepresentation> backup_;
   bool update_required;
   typedef std::set<std::string> UnpairedDevices;

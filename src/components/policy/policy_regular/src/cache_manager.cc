@@ -1138,24 +1138,25 @@ bool CacheManager::GetPriority(const std::string& policy_app_id,
   return app_id_exists;
 }
 
-void CacheManager::CheckSnapshotInitialization() {
+void CacheManager::CheckSnapshotInitialization(
+    std::shared_ptr<policy_table::Table>& snapshot) {
   CACHE_MANAGER_CHECK_VOID();
-  if (!snapshot_) {
+  if (!snapshot) {
     LOG4CXX_ERROR(logger_, "Snapshot pointer is not initialized");
     return;
   }
 
-  *(snapshot_->policy_table.module_config.preloaded_pt) = false;
+  *(snapshot->policy_table.module_config.preloaded_pt) = false;
 
-  *(snapshot_->policy_table.module_config.full_app_id_supported) =
+  *(snapshot->policy_table.module_config.full_app_id_supported) =
       get_settings().use_full_app_id();
 
   // SDL must not send certificate in snapshot
-  snapshot_->policy_table.module_config.certificate =
+  snapshot->policy_table.module_config.certificate =
       rpc::Optional<rpc::String<0, 65535> >();
 
   rpc::Optional<policy_table::ModuleMeta>& module_meta =
-      snapshot_->policy_table.module_meta;
+      snapshot->policy_table.module_meta;
   if (!module_meta->pt_exchanged_at_odometer_x->is_initialized()) {
     *(module_meta->pt_exchanged_at_odometer_x) = 0;
   }
@@ -1169,8 +1170,8 @@ void CacheManager::CheckSnapshotInitialization() {
   /* consumer_friendly_messages are required for the snapshot;
    * consumer_friendly_messages->version is required always, but
    * consumer_friendly_messages->messages must be omitted in PTS */
-  if (snapshot_->policy_table.consumer_friendly_messages->is_initialized()) {
-    snapshot_->policy_table.consumer_friendly_messages->messages =
+  if (snapshot->policy_table.consumer_friendly_messages->is_initialized()) {
+    snapshot->policy_table.consumer_friendly_messages->messages =
         rpc::Optional<policy_table::Messages>();
   } else {
     LOG4CXX_WARN(logger_,
@@ -1180,7 +1181,7 @@ void CacheManager::CheckSnapshotInitialization() {
   /* policy_table.usage_and_error_counts are required for PTS and
    * policy_table.usage_and_error_counts->app_level is optional */
   rpc::Optional<policy_table::UsageAndErrorCounts>& usage_and_error_counts =
-      snapshot_->policy_table.usage_and_error_counts;
+      snapshot->policy_table.usage_and_error_counts;
 
   if (usage_and_error_counts->app_level->is_initialized()) {
     policy_table::AppLevels::iterator it =
@@ -1394,44 +1395,44 @@ bool CacheManager::IsPermissionsCalculated(const std::string& device_id,
 }
 
 std::shared_ptr<policy_table::Table> CacheManager::GenerateSnapshot() {
-  CACHE_MANAGER_CHECK(snapshot_);
+  CACHE_MANAGER_CHECK(pt_);
 
-  snapshot_ = std::make_shared<policy_table::Table>();
+  auto snapshot = std::make_shared<policy_table::Table>();
 
   // Copy all members of policy table except messages in consumer friendly
   // messages
   sync_primitives::AutoLock auto_lock(cache_lock_);
-  snapshot_->policy_table.app_policies_section =
+  snapshot->policy_table.app_policies_section =
       pt_->policy_table.app_policies_section;
-  snapshot_->policy_table.functional_groupings =
+  snapshot->policy_table.functional_groupings =
       pt_->policy_table.functional_groupings;
-  snapshot_->policy_table.consumer_friendly_messages->version =
+  snapshot->policy_table.consumer_friendly_messages->version =
       pt_->policy_table.consumer_friendly_messages->version;
-  snapshot_->policy_table.consumer_friendly_messages->mark_initialized();
-  snapshot_->policy_table.module_config = pt_->policy_table.module_config;
-  snapshot_->policy_table.module_meta = pt_->policy_table.module_meta;
-  snapshot_->policy_table.usage_and_error_counts =
+  snapshot->policy_table.consumer_friendly_messages->mark_initialized();
+  snapshot->policy_table.module_config = pt_->policy_table.module_config;
+  snapshot->policy_table.module_meta = pt_->policy_table.module_meta;
+  snapshot->policy_table.usage_and_error_counts =
       pt_->policy_table.usage_and_error_counts;
-  snapshot_->policy_table.usage_and_error_counts->app_level =
+  snapshot->policy_table.usage_and_error_counts->app_level =
       pt_->policy_table.usage_and_error_counts->app_level;
-  snapshot_->policy_table.usage_and_error_counts->mark_initialized();
-  snapshot_->policy_table.usage_and_error_counts->app_level->mark_initialized();
-  snapshot_->policy_table.device_data = pt_->policy_table.device_data;
+  snapshot->policy_table.usage_and_error_counts->mark_initialized();
+  snapshot->policy_table.usage_and_error_counts->app_level->mark_initialized();
+  snapshot->policy_table.device_data = pt_->policy_table.device_data;
 
   if (pt_->policy_table.vehicle_data.is_initialized()) {
-    snapshot_->policy_table.vehicle_data =
+    snapshot->policy_table.vehicle_data =
         rpc::Optional<policy_table::VehicleData>();
-    snapshot_->policy_table.vehicle_data->mark_initialized();
-    snapshot_->policy_table.vehicle_data->schema_version =
+    snapshot->policy_table.vehicle_data->mark_initialized();
+    snapshot->policy_table.vehicle_data->schema_version =
         pt_->policy_table.vehicle_data->schema_version;
   }
 
   // Set policy table type to Snapshot
-  snapshot_->SetPolicyTableType(
+  snapshot->SetPolicyTableType(
       rpc::policy_table_interface_base::PolicyTableType::PT_SNAPSHOT);
 
-  CheckSnapshotInitialization();
-  return snapshot_;
+  CheckSnapshotInitialization(snapshot);
+  return snapshot;
 }
 
 bool CacheManager::GetInitialAppData(const std::string& app_id,
