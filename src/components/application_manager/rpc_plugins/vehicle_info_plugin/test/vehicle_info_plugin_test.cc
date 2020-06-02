@@ -50,6 +50,8 @@ using ::testing::ReturnRef;
 
 namespace {
 const std::string kVehicleData = "speed";
+const unsigned kExtensionUID =
+    VehicleInfoAppExtension::VehicleInfoAppExtensionUID;
 }  // namespace
 
 class VehicleInfoPluginTest : public ::testing::Test {
@@ -112,7 +114,7 @@ TEST_F(VehicleInfoPluginTest, OnPolicyEvent_SubscriptionExists_Unsuccess) {
 
   VehicleInfoAppExtension app_extension(*vehicle_info_plugin_, *mock_app_ptr_);
   auto extension_ptr = std::make_shared<VehicleInfoAppExtension>(app_extension);
-  ON_CALL(*mock_app_ptr_, QueryInterface(_))
+  ON_CALL(*mock_app_ptr_, QueryInterface(kExtensionUID))
       .WillByDefault(Return(extension_ptr));
 
   EXPECT_CALL(app_manager_mock_, GetRPCService()).Times(0);
@@ -131,7 +133,7 @@ TEST_F(VehicleInfoPluginTest,
        OnApplicationEvent_AppUnregisteredNoSubscriptions_Unsuccess) {
   VehicleInfoAppExtension app_extension(*vehicle_info_plugin_, *mock_app_ptr_);
   auto extension_ptr = std::make_shared<VehicleInfoAppExtension>(app_extension);
-  ON_CALL(*mock_app_ptr_, QueryInterface(_))
+  ON_CALL(*mock_app_ptr_, QueryInterface(kExtensionUID))
       .WillByDefault(Return(extension_ptr));
 
   EXPECT_CALL(app_manager_mock_, GetRPCService()).Times(0);
@@ -144,7 +146,7 @@ TEST_F(VehicleInfoPluginTest,
   VehicleInfoAppExtension app_extension(*vehicle_info_plugin_, *mock_app_ptr_);
   app_extension.subscribeToVehicleInfo(kVehicleData);
   auto extension_ptr = std::make_shared<VehicleInfoAppExtension>(app_extension);
-  ON_CALL(*mock_app_ptr_, QueryInterface(_))
+  ON_CALL(*mock_app_ptr_, QueryInterface(kExtensionUID))
       .WillByDefault(Return(extension_ptr));
 
   EXPECT_CALL(app_manager_mock_, applications())
@@ -179,7 +181,7 @@ TEST_F(VehicleInfoPluginTest,
   VehicleInfoAppExtension app_extension(*vehicle_info_plugin_, *mock_app_ptr_);
   app_extension.subscribeToVehicleInfo(kVehicleData);
   auto extension_ptr = std::make_shared<VehicleInfoAppExtension>(app_extension);
-  EXPECT_CALL(*mock_app_ptr_, QueryInterface(_))
+  EXPECT_CALL(*mock_app_ptr_, QueryInterface(kExtensionUID))
       .WillOnce(Return(extension_ptr));
 
   auto another_app_ptr =
@@ -196,7 +198,7 @@ TEST_F(VehicleInfoPluginTest,
   another_extension.subscribeToVehicleInfo(kVehicleData);
   auto another_extension_ptr =
       std::make_shared<VehicleInfoAppExtension>(another_extension);
-  EXPECT_CALL(*another_app_ptr, QueryInterface(_))
+  EXPECT_CALL(*another_app_ptr, QueryInterface(kExtensionUID))
       .WillOnce(Return(another_extension_ptr));
 
   EXPECT_CALL(app_manager_mock_, GetRPCService()).Times(0);
