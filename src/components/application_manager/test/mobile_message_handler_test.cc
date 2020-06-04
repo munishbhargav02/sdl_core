@@ -128,7 +128,7 @@ class MobileMessageHandlerTest : public testing::Test {
 
     // Act
     size_t payload_size = data.size();
-    const auto message = std::shared_ptr<Message>(HandleIncomingMessage(
+    const auto message = std::unique_ptr<Message>(HandleIncomingMessage(
         protocol_version, json_plus_binary_data, payload_size));
 
     // Checks
@@ -148,7 +148,7 @@ class MobileMessageHandlerTest : public testing::Test {
     // Arrange
     size_t payload_size = data.size();
     size_t full_data_size = data.size() + PROTOCOL_HEADER_V2_SIZE;
-    const auto message = std::shared_ptr<Message>(
+    const auto message = std::unique_ptr<Message>(
         HandleIncomingMessage(protocol_version, data, payload_size));
 
     // Checks
@@ -197,7 +197,7 @@ class MobileMessageHandlerTest : public testing::Test {
     MobileMessage message_to_send = CreateMessageForSending(
         protocol_version, function_id, correlation_id, connection_key, data);
     // Act
-    std::shared_ptr<RawMessage> result_message(
+    const std::unique_ptr<RawMessage> result_message(
         MobileMessageHandler::HandleOutgoingMessageProtocol(message_to_send));
 
     std::vector<uint8_t> full_data = joiner<std::vector<uint8_t> >(
@@ -218,9 +218,8 @@ class MobileMessageHandlerTest : public testing::Test {
   void TestHandlingOutgoingMessageProtocolWithBinaryData(
       const uint32_t protocol_version) {
     // Arrange
-    application_manager::BinaryData* bin_dat =
-        new application_manager::BinaryData;
-    bin_dat->push_back('\a');
+    application_manager::BinaryData bin_dat;
+    bin_dat.push_back('\a');
 
     const uint32_t function_id = 247u;
     const uint32_t correlation_id = 92u;
@@ -231,16 +230,14 @@ class MobileMessageHandlerTest : public testing::Test {
                                                             correlation_id,
                                                             connection_key,
                                                             data,
-                                                            bin_dat);
+                                                            &bin_dat);
     // Act
-    std::shared_ptr<RawMessage> result_message(
+    const std::unique_ptr<RawMessage> result_message(
         MobileMessageHandler::HandleOutgoingMessageProtocol(message_to_send));
     std::vector<uint8_t> full_data = joiner<std::vector<uint8_t> >(
         binary_header, binary_header + PROTOCOL_HEADER_V2_SIZE, data);
     size_t full_size =
-        sizeof(uint8_t) * full_data.size() + bin_dat->size() * sizeof(uint8_t);
-
-    delete bin_dat;
+        sizeof(uint8_t) * full_data.size() + bin_dat.size() * sizeof(uint8_t);
 
     // Checks
     EXPECT_EQ(protocol_version, result_message->protocol_version());

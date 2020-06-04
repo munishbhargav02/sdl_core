@@ -57,44 +57,58 @@ ResumptionDataTest::~ResumptionDataTest() {
     delete submenu.second;
   }
 
+  test_submenu_map.clear();
+
   for (auto& command : test_commands_map) {
     delete command.second;
   }
+
+  test_commands_map.clear();
 
   for (auto& choiceset : test_choiceset_map) {
     delete choiceset.second;
   }
 
+  test_choiceset_map.clear();
+
   if (help_prompt_) {
     delete help_prompt_;
+    help_prompt_ = nullptr;
   }
 
   if (timeout_prompt_) {
     delete timeout_prompt_;
+    timeout_prompt_ = nullptr;
   }
 
   if (vr_help_) {
     delete vr_help_;
+    vr_help_ = nullptr;
   }
 
   if (vr_help_title_) {
     delete vr_help_title_;
+    vr_help_title_ = nullptr;
   }
 
   if (vr_synonyms_) {
     delete vr_synonyms_;
+    vr_synonyms_ = nullptr;
   }
 
   if (keyboard_props_) {
     delete keyboard_props_;
+    keyboard_props_ = nullptr;
   }
 
   if (menu_title_) {
     delete menu_title_;
+    menu_title_ = nullptr;
   }
 
   if (menu_icon_) {
     delete menu_icon_;
+    menu_icon_ = nullptr;
   }
 }
 

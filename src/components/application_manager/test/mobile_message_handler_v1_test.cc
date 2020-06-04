@@ -75,7 +75,7 @@ TEST(MobileMessageHandlerTestV1Test,
                                                        data_json.length(),
                                                        false);
 
-  std::shared_ptr<application_manager::Message> ptr(
+  const std::unique_ptr<application_manager::Message> ptr(
       MobileMessageHandler::HandleIncomingMessageProtocol(message));
 
   ASSERT_TRUE(ptr.get());
@@ -98,7 +98,7 @@ TEST(MobileMessageHandlerTestV1Test,
                                                        full_data.length(),
                                                        false);
 
-  const auto ptr = std::shared_ptr<application_manager::Message>(
+  const auto ptr = std::unique_ptr<application_manager::Message>(
       MobileMessageHandler::HandleIncomingMessageProtocol(message));
 
   ASSERT_TRUE(ptr.get());
@@ -121,7 +121,7 @@ TEST(MobileMessageHandlerTestV1Test,
   message->set_json_message(data_json);
   message->set_connection_key(connection_key_p1);
 
-  std::shared_ptr<RawMessage> ptr(
+  const std::unique_ptr<RawMessage> ptr(
       MobileMessageHandler::HandleOutgoingMessageProtocol(message));
 
   ASSERT_TRUE(ptr.get());
