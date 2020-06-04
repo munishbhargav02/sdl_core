@@ -94,17 +94,17 @@ void AsyncRunner::AsyncRunnerDelegate::waitForDelegate() {
 
 void AsyncRunner::AsyncRunnerDelegate::clearDelegateQueue() {
   if (!delegates_queue_.empty()) {
-    std::queue<threads::ThreadDelegate*> empty_queue;
+    std::queue<threads::ThreadDelegate*> queue_to_delete;
     delegates_queue_lock_.Acquire();
-    std::swap(delegates_queue_, empty_queue);
+    std::swap(delegates_queue_, queue_to_delete);
     delegates_queue_lock_.Release();
     do {
-      auto delegate = empty_queue.front();
-      empty_queue.pop();
+      auto delegate = queue_to_delete.front();
+      queue_to_delete.pop();
       if (delegate) {
         delete delegate;
       }
-    } while (!empty_queue.empty());
+    } while (!queue_to_delete.empty());
   }
 }
 
