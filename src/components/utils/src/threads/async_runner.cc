@@ -32,6 +32,7 @@
 
 #include "utils/threads/async_runner.h"
 
+#include <algorithm>
 #include <string>
 
 #include "utils/logger.h"
@@ -67,7 +68,7 @@ AsyncRunner::~AsyncRunner() {
 AsyncRunner::AsyncRunnerDelegate::AsyncRunnerDelegate() : stop_flag_(false) {}
 
 AsyncRunner::AsyncRunnerDelegate::~AsyncRunnerDelegate() {
-  clearDelegateQueue();
+  ClearDelegateQueue();
 }
 
 void AsyncRunner::AsyncRunnerDelegate::processDelegate() {
@@ -92,7 +93,7 @@ void AsyncRunner::AsyncRunnerDelegate::waitForDelegate() {
   }
 }
 
-void AsyncRunner::AsyncRunnerDelegate::clearDelegateQueue() {
+void AsyncRunner::AsyncRunnerDelegate::ClearDelegateQueue() {
   if (!delegates_queue_.empty()) {
     std::queue<threads::ThreadDelegate*> queue_to_delete;
     delegates_queue_lock_.Acquire();
