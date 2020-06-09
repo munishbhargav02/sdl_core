@@ -118,7 +118,7 @@ class AsyncRunner {
      */
     void ClearDelegateQueue();
 
-    std::queue<threads::ThreadDelegate*> DelegatesQueue;
+    typedef std::queue<threads::ThreadDelegate*> DelegatesQueue;
     DelegatesQueue delegates_queue_;
     sync_primitives::ConditionalVariable delegate_notifier_;
     sync_primitives::Lock delegates_queue_lock_;
