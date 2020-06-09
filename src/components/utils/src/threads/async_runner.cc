@@ -95,7 +95,7 @@ void AsyncRunner::AsyncRunnerDelegate::waitForDelegate() {
 
 void AsyncRunner::AsyncRunnerDelegate::ClearDelegateQueue() {
   if (!delegates_queue_.empty()) {
-    std::queue<threads::ThreadDelegate*> queue_to_delete;
+    DelegatesQueue queue_to_delete;
     delegates_queue_lock_.Acquire();
     std::swap(delegates_queue_, queue_to_delete);
     delegates_queue_lock_.Release();
