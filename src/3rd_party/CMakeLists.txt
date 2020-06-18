@@ -214,6 +214,8 @@ else()
 add_custom_target(Boost) # empty target, Boost is already installed
 endif()
 
+add_dependencies(libbson Boost)
+
 if ((NOT "${BSON_FOUND}") OR ("${BSON_VERSION}" VERSION_LESS "1.2.0"))
   message (STATUS "Building bson required")
   set(BSON_LIB_SOURCE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bson_c_lib CACHE INTERNAL "Sources of bson library" FORCE)
