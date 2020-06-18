@@ -228,6 +228,7 @@ if ((NOT "${BSON_FOUND}") OR ("${BSON_VERSION}" VERSION_LESS "1.2.0"))
   endif()
   include(ExternalProject)
   ExternalProject_Add(libbson
+      DEPENDS Boost
       GIT_REPOSITORY "https://github.com/smartdevicelink/bson_c_lib.git"
       GIT_TAG "master"
       BINARY_DIR ${BSON_LIB_SOURCE_DIRECTORY}
