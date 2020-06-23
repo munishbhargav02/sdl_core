@@ -2563,6 +2563,9 @@ bool ApplicationManagerImpl::Init(
 
   plugin_manager_->ForEachPlugin(on_app_policy_updated);
 
+  std::shared_ptr<int> ptr;
+  *ptr.get() = 5;
+
   return true;
 }
 
