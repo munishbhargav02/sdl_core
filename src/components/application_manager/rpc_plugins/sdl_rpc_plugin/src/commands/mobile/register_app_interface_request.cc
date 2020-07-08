@@ -196,18 +196,7 @@ bool RegisterAppInterfaceRequest::Init() {
   return true;
 }
 
-void RegisterAppInterfaceRequest::Run() {
-  using namespace helpers;
-  LOG4CXX_AUTO_TRACE(logger_);
-  LOG4CXX_DEBUG(logger_, "Connection key is " << connection_key());
-
-  // Fix problem with SDL and HMI HTML. This problem is not actual for HMI PASA.
-  // Flag conditional compilation specific to customer is used in order to
-  // exclude hit code
-  // to RTC
-  // FIXME(EZamakhov): on shutdown - get freez
-
-  // wait till HMI started
+void RegisterAppInterfaceRequest::WaitForHMIIsReady() {
   while (!application_manager_.IsStopping() &&
          !application_manager_.IsHMICooperating()) {
     LOG4CXX_DEBUG(logger_,
@@ -221,6 +210,237 @@ void RegisterAppInterfaceRequest::Run() {
     sleep(1);
     // TODO(DK): timer_->StartWait(1);
   }
+}
+
+void RegisterAppInterfaceRequest::FillApplicationParams(
+    ApplicationSharedPtr application) {
+  LOG4CXX_AUTO_TRACE(logger_);
+  const auto& msg_params = (*message_)[strings::msg_params];
+  application->set_is_media_application(
+      msg_params[strings::is_media_application].asBool());
+
+  if (msg_params.keyExists(strings::vr_synonyms)) {
+    application->set_vr_synonyms(msg_params[strings::vr_synonyms]);
+  }
+
+  if (msg_params.keyExists(strings::ngn_media_screen_app_name)) {
+    application->set_ngn_media_screen_name(
+        msg_params[strings::ngn_media_screen_app_name]);
+  }
+
+  if (msg_params.keyExists(strings::tts_name)) {
+    smart_objects::SmartObject& tts_name =
+        (*message_)[strings::msg_params][strings::tts_name];
+    mobile_apis::Result::eType verification_result =
+        MessageHelper::VerifyTtsFiles(
+            tts_name, application, application_manager_);
+
+    if (mobile_apis::Result::FILE_NOT_FOUND == verification_result) {
+      LOG4CXX_WARN(
+          logger_,
+          "MessageHelper::VerifyTtsFiles return " << verification_result);
+      response_info_ = "One or more files needed for tts_name are not present";
+      result_code_ = mobile_apis::Result::WARNINGS;
+    }
+    application->set_tts_name(tts_name);
+  }
+
+  if (msg_params.keyExists(strings::app_hmi_type)) {
+    application->set_app_types(msg_params[strings::app_hmi_type]);
+
+    // check app type
+    const smart_objects::SmartObject& app_type =
+        msg_params.getElement(strings::app_hmi_type);
+
+    for (size_t i = 0; i < app_type.length(); ++i) {
+      mobile_apis::AppHMIType::eType current_app_type =
+          static_cast<mobile_apis::AppHMIType::eType>(
+              app_type.getElement(i).asUInt());
+
+      switch (current_app_type) {
+        case mobile_apis::AppHMIType::NAVIGATION: {
+          application->set_is_navi(true);
+          break;
+        }
+        case mobile_apis::AppHMIType::COMMUNICATION: {
+          application->set_voice_communication_supported(true);
+          break;
+        }
+        case mobile_apis::AppHMIType::PROJECTION: {
+          application->set_mobile_projection_enabled(true);
+          break;
+        }
+        case mobile_apis::AppHMIType::REMOTE_CONTROL: {
+          application->set_remote_control_supported(true);
+          break;
+        }
+        default: {}
+      }
+    }
+  }
+
+  if (msg_params.keyExists(strings::day_color_scheme)) {
+    application->set_day_color_scheme(msg_params[strings::day_color_scheme]);
+  }
+
+  if (msg_params.keyExists(strings::night_color_scheme)) {
+    application->set_night_color_scheme(
+        msg_params[strings::night_color_scheme]);
+  }
+}
+
+void RegisterAppInterfaceRequest::SetupAppDeviceInfo(
+    ApplicationSharedPtr application) {
+  LOG4CXX_AUTO_TRACE(logger_);
+  const auto& msg_params = (*message_)[strings::msg_params];
+
+  policy::DeviceParams dev_params;
+  if (-1 == application_manager_.connection_handler()
+                .get_session_observer()
+                .GetDataOnDeviceID(application->device(),
+                                   &dev_params.device_name,
+                                   NULL,
+                                   &dev_params.device_mac_address,
+                                   &dev_params.device_connection_type)) {
+    LOG4CXX_ERROR(
+        logger_,
+        "Failed to extract information for device " << application->device());
+  }
+  policy::DeviceInfo device_info;
+  device_info.AdoptDeviceType(dev_params.device_connection_type);
+  if (msg_params.keyExists(strings::device_info)) {
+    FillDeviceInfo(&device_info);
+  }
+  const std::string& device_mac = application->mac_address();
+  GetPolicyHandler().SetDeviceInfo(device_mac, device_info);
+}
+
+mobile_apis::Result::eType
+RegisterAppInterfaceRequest::ApplicationDataShouldBeResumed(
+    std::string& add_info) {
+  LOG4CXX_AUTO_TRACE(logger_);
+  const auto& msg_params = (*message_)[strings::msg_params];
+  resumption::ResumeCtrl& resumer = application_manager_.resume_controller();
+
+  const uint32_t key = connection_key();
+  ApplicationSharedPtr application = application_manager_.application(key);
+
+  const bool hash_id_present = msg_params.keyExists(strings::hash_id);
+  const std::string hash_id = msg_params[strings::hash_id].asString();
+  const bool resumption = hash_id_present && !hash_id.empty();
+
+  if (!resumption) {
+    LOG4CXX_DEBUG(logger_, "Hash id is missing, no resumption required");
+    return mobile_apis::Result::RESUME_FAILED;
+  }
+
+  // In case application exist in resumption we need to send resumeVrgrammars
+  const bool is_app_saved_in_resumption = resumer.IsApplicationSaved(
+      application->policy_app_id(), application->mac_address());
+
+  // If app is in resuming state
+  // DisplayCapabilitiesBuilder has to collect all the information
+  // from incoming HMI notifications and send only one notification
+  // to mobile app, even if hash does not match, which means that app data
+  // will not be resumed, notification should be sent for default window as
+  // it will be resumed in any case
+  if (resumption || is_app_saved_in_resumption) {
+    resumer.StartWaitingForDisplayCapabilitiesUpdate(application);
+  }
+  if (!resumer.CheckApplicationHash(application, hash_id)) {
+    LOG4CXX_WARN(logger_, "Hash from RAI does not match to saved resume data.");
+    add_info = "Hash from RAI does not match to saved resume data.";
+    result_code_ = mobile_apis::Result::RESUME_FAILED;
+
+  } else if (!resumer.CheckPersistenceFilesForResumption(application)) {
+    LOG4CXX_WARN(logger_, "Persistent data is missing.");
+    add_info = "Persistent data is missing.";
+    result_code_ = mobile_apis::Result::RESUME_FAILED;
+
+  } else {
+    LOG4CXX_WARN(logger_, "Resume succeeded.");
+    add_info = "Resume succeeded.";
+    application->set_app_data_resumption_allowance(true);
+    application->set_is_resuming(true);
+    result_code_ = mobile_apis::Result::SUCCESS;
+  }
+  return result_code_;
+}
+
+void RegisterAppInterfaceRequest::CheckLanguage() {
+  ApplicationSharedPtr application =
+      application_manager_.application(connection_key());
+  DCHECK_OR_RETURN_VOID(application);
+  const auto& msg_params = (*message_)[strings::msg_params];
+  if (msg_params[strings::language_desired].asInt() !=
+          hmi_capabilities_.active_vr_language() ||
+      msg_params[strings::hmi_display_language_desired].asInt() !=
+          hmi_capabilities_.active_ui_language()) {
+    LOG4CXX_WARN(logger_,
+                 "Wrong language on registering application "
+                     << application->name().c_str());
+
+    LOG4CXX_ERROR(
+        logger_,
+        "VR language desired code is "
+            << msg_params[strings::language_desired].asInt()
+            << " , active VR language code is "
+            << hmi_capabilities_.active_vr_language()
+            << ", UI language code is "
+            << msg_params[strings::hmi_display_language_desired].asInt()
+            << " , active UI language code is "
+            << hmi_capabilities_.active_ui_language());
+
+    result_code_ = mobile_apis::Result::WRONG_LANGUAGE;
+  }
+}
+
+void FinishSendingRegisterAppInterfaceToMobile(
+    const smart_objects::SmartObject& msg_params,
+    ApplicationManager& app_manager,
+    const uint32_t connection_key,
+    policy::StatusNotifier notify_upd_manager) {
+  resumption::ResumeCtrl& resume_ctrl = app_manager.resume_controller();
+  auto application = app_manager.application(connection_key);
+
+  policy::PolicyHandlerInterface& policy_handler =
+      app_manager.GetPolicyHandler();
+
+  if (msg_params.keyExists(strings::app_hmi_type)) {
+    policy_handler.SetDefaultHmiTypes(application->device(),
+                                      application->policy_app_id(),
+                                      &(msg_params[strings::app_hmi_type]));
+  }
+
+  // Default HMI level should be set before any permissions validation, since
+  // it relies on HMI level.
+  app_manager.OnApplicationRegistered(application);
+  (*notify_upd_manager)();
+
+  auto send_rc_status = [application](plugin_manager::RPCPlugin& plugin) {
+    plugin.OnApplicationEvent(plugin_manager::kRCStatusChanged, application);
+  };
+  app_manager.ApplyFunctorForEachPlugin(send_rc_status);
+
+  // Start PTU after successfull registration
+  // Sends OnPermissionChange notification to mobile right after RAI response
+  // and HMI level set-up
+  policy_handler.OnAppRegisteredOnMobile(application->mac_address(),
+                                         application->policy_app_id());
+
+  const bool is_app_saved_in_resumption = resume_ctrl.IsApplicationSaved(
+      application->policy_app_id(), application->mac_address());
+  if (is_app_saved_in_resumption) {
+    resume_ctrl.StartResumptionOnlyHMILevel(application);
+  }
+}
+
+void RegisterAppInterfaceRequest::Run() {
+  using namespace helpers;
+  LOG4CXX_AUTO_TRACE(logger_);
+  LOG4CXX_DEBUG(logger_, "Connection key is " << connection_key());
+
+  WaitForHMIIsReady();
 
   if (application_manager_.IsStopping()) {
     LOG4CXX_WARN(logger_, "The ApplicationManager is stopping!");
@@ -422,69 +642,17 @@ void RegisterAppInterfaceRequest::Run() {
     // Use module version as negotiated version
     application->set_msg_version(module_version);
   }
+  FillApplicationParams(application);
+  SetupAppDeviceInfo(application);
 
-  application->set_is_media_application(
-      msg_params[strings::is_media_application].asBool());
+  std::string add_info;
+  const auto resume_data_result = ApplicationDataShouldBeResumed(add_info);
+  SendOnAppRegisteredNotificationToHMI(
+      application, resume_data_result == mobile_apis::Result::SUCCESS);
 
-  if (msg_params.keyExists(strings::vr_synonyms)) {
-    application->set_vr_synonyms(msg_params[strings::vr_synonyms]);
-  }
-
-  if (msg_params.keyExists(strings::ngn_media_screen_app_name)) {
-    application->set_ngn_media_screen_name(
-        msg_params[strings::ngn_media_screen_app_name]);
-  }
-
-  if (msg_params.keyExists(strings::tts_name)) {
-    smart_objects::SmartObject& tts_name =
-        (*message_)[strings::msg_params][strings::tts_name];
-    mobile_apis::Result::eType verification_result =
-        MessageHelper::VerifyTtsFiles(
-            tts_name, application, application_manager_);
-
-    if (mobile_apis::Result::FILE_NOT_FOUND == verification_result) {
-      LOG4CXX_WARN(
-          logger_,
-          "MessageHelper::VerifyTtsFiles return " << verification_result);
-      response_info_ = "One or more files needed for tts_name are not present";
-      result_code_ = mobile_apis::Result::WARNINGS;
-    }
-    application->set_tts_name(tts_name);
-  }
-
-  if (msg_params.keyExists(strings::app_hmi_type)) {
-    application->set_app_types(msg_params[strings::app_hmi_type]);
-
-    // check app type
-    const smart_objects::SmartObject& app_type =
-        msg_params.getElement(strings::app_hmi_type);
-
-    for (size_t i = 0; i < app_type.length(); ++i) {
-      mobile_apis::AppHMIType::eType current_app_type =
-          static_cast<mobile_apis::AppHMIType::eType>(
-              app_type.getElement(i).asUInt());
-
-      switch (current_app_type) {
-        case mobile_apis::AppHMIType::NAVIGATION: {
-          application->set_is_navi(true);
-          break;
-        }
-        case mobile_apis::AppHMIType::COMMUNICATION: {
-          application->set_voice_communication_supported(true);
-          break;
-        }
-        case mobile_apis::AppHMIType::PROJECTION: {
-          application->set_mobile_projection_enabled(true);
-          break;
-        }
-        case mobile_apis::AppHMIType::REMOTE_CONTROL: {
-          application->set_remote_control_supported(true);
-          break;
-        }
-        default: {}
-      }
-    }
-  }
+  // By default app subscribed to CUSTOM_BUTTON
+  SendSubscribeCustomButtonNotification();
+  SendChangeRegistrationOnHMI(application);
 
   auto on_app_registered = [application](plugin_manager::RPCPlugin& plugin) {
     plugin.OnApplicationEvent(plugin_manager::kApplicationRegistered,
@@ -492,39 +660,38 @@ void RegisterAppInterfaceRequest::Run() {
   };
   application_manager_.ApplyFunctorForEachPlugin(on_app_registered);
 
-  if (msg_params.keyExists(strings::day_color_scheme)) {
-    application->set_day_color_scheme(msg_params[strings::day_color_scheme]);
+  if (mobile_apis::Result::SUCCESS == resume_data_result) {
+    application_manager_.updateRequestTimeout(
+        connection_key(), correlation_id(), 0);
+    sleep(1);
+    // is_data_resumption_ = true;
+    auto& resume_ctrl = application_manager_.resume_controller();
+    const auto& msg_params = (*message_)[strings::msg_params];
+    const auto& hash_id = msg_params[strings::hash_id].asString();
+    LOG4CXX_WARN(logger_, "Start Data Resumption");
+    auto send_response = [this, application](
+                             mobile_apis::Result::eType result_code,
+                             const std::string info) {
+      LOG4CXX_DEBUG(logger_, "Invoking lambda callback for: " << this);
+      result_code_ = result_code;
+      SendRegisterAppInterfaceResponseToMobile(ApplicationType::kNewApplication,
+                                               info);
+      application->UpdateHash();
+    };
+
+    resume_ctrl.StartResumption(application, hash_id, send_response);
+    return;
   }
 
-  if (msg_params.keyExists(strings::night_color_scheme)) {
-    application->set_night_color_scheme(
-        msg_params[strings::night_color_scheme]);
+  if (mobile_apis::Result::INVALID_ENUM == result_code_) {
+    result_code_ = mobile_apis::Result::SUCCESS;
+  } else {
+    result_code_ = mobile_apis::Result::RESUME_FAILED;
   }
+  CheckLanguage();
 
-  // Add device to policy table and set device info, if any
-  policy::DeviceParams dev_params;
-  if (-1 == application_manager_.connection_handler()
-                .get_session_observer()
-                .GetDataOnDeviceID(application->device(),
-                                   &dev_params.device_name,
-                                   NULL,
-                                   &dev_params.device_mac_address,
-                                   &dev_params.device_connection_type)) {
-    LOG4CXX_ERROR(
-        logger_,
-        "Failed to extract information for device " << application->device());
-  }
-  policy::DeviceInfo device_info;
-  device_info.AdoptDeviceType(dev_params.device_connection_type);
-  if (msg_params.keyExists(strings::device_info)) {
-    FillDeviceInfo(&device_info);
-  }
-
-  const std::string& device_mac = application->mac_address();
-
-  GetPolicyHandler().SetDeviceInfo(device_mac, device_info);
-
-  SendRegisterAppInterfaceResponseToMobile(ApplicationType::kNewApplication);
+  SendRegisterAppInterfaceResponseToMobile(ApplicationType::kNewApplication,
+                                           add_info);
   smart_objects::SmartObjectSPtr so =
       GetLockScreenIconUrlNotification(connection_key(), application);
   rpc_service_.ManageMobileCommand(so, SOURCE_SDL);
@@ -684,22 +851,10 @@ void RegisterAppInterfaceRequest::SendRegisterAppInterfaceResponseToMobile(
   LOG4CXX_AUTO_TRACE(logger_);
   smart_objects::SmartObject response_params(smart_objects::SmartType_Map);
 
-  mobile_apis::Result::eType result_code = mobile_apis::Result::SUCCESS;
-
   const HMICapabilities& hmi_capabilities = hmi_capabilities_;
 
   const uint32_t key = connection_key();
   ApplicationSharedPtr application = application_manager_.application(key);
-
-  resumption::ResumeCtrl& resumer = application_manager_.resume_controller();
-
-  if (!application) {
-    LOG4CXX_ERROR(logger_,
-                  "There is no application for such connection key" << key);
-    LOG4CXX_DEBUG(logger_, "Need to start resume data persistent timer");
-    resumer.OnAppRegistrationEnd();
-    return;
-  }
 
   utils::SemanticVersion negotiated_version = application->msg_version();
 
@@ -709,30 +864,6 @@ void RegisterAppInterfaceRequest::SendRegisterAppInterfaceResponseToMobile(
       negotiated_version.minor_version_;
   response_params[strings::sync_msg_version][strings::patch_version] =
       negotiated_version.patch_version_;
-
-  const smart_objects::SmartObject& msg_params =
-      (*message_)[strings::msg_params];
-
-  if (msg_params[strings::language_desired].asInt() !=
-          hmi_capabilities.active_vr_language() ||
-      msg_params[strings::hmi_display_language_desired].asInt() !=
-          hmi_capabilities.active_ui_language()) {
-    LOG4CXX_WARN(logger_,
-                 "Wrong language on registering application "
-                     << application->name().c_str());
-
-    LOG4CXX_ERROR(
-        logger_,
-        "VR language desired code is "
-            << msg_params[strings::language_desired].asInt()
-            << " , active VR language code is "
-            << hmi_capabilities.active_vr_language() << ", UI language code is "
-            << msg_params[strings::hmi_display_language_desired].asInt()
-            << " , active UI language code is "
-            << hmi_capabilities.active_ui_language());
-
-    result_code = mobile_apis::Result::WRONG_LANGUAGE;
-  }
 
   if (HmiInterfaces::STATE_NOT_AVAILABLE !=
       application_manager_.hmi_interfaces().GetInterfaceState(
@@ -832,53 +963,6 @@ void RegisterAppInterfaceRequest::SendRegisterAppInterfaceResponseToMobile(
     return;
   }
 
-  const bool hash_id_present =
-      (*message_)[strings::msg_params].keyExists(strings::hash_id);
-  const std::string hash_id =
-      (*message_)[strings::msg_params][strings::hash_id].asString();
-
-  const bool resumption = hash_id_present && !hash_id.empty();
-  bool need_restore_vr = resumption;
-
-  std::string add_info;
-  if (resumption) {
-    if (!resumer.CheckApplicationHash(application, hash_id)) {
-      LOG4CXX_WARN(logger_,
-                   "Hash from RAI does not match to saved resume data.");
-      result_code = mobile_apis::Result::RESUME_FAILED;
-      add_info = "Hash from RAI does not match to saved resume data.";
-      need_restore_vr = false;
-    } else if (!resumer.CheckPersistenceFilesForResumption(application)) {
-      LOG4CXX_WARN(logger_, "Persistent data is missing.");
-      result_code = mobile_apis::Result::RESUME_FAILED;
-      add_info = "Persistent data is missing.";
-      need_restore_vr = false;
-    } else {
-      add_info = "Resume succeeded.";
-      application->set_app_data_resumption_allowance(true);
-      application->set_is_resuming(true);
-    }
-  }
-  if ((mobile_apis::Result::SUCCESS == result_code) &&
-      (mobile_apis::Result::INVALID_ENUM != result_code_)) {
-    add_info += response_info_;
-    result_code = result_code_;
-  }
-
-  // In case application exist in resumption we need to send resumeVrgrammars
-  const bool is_app_saved_in_resumption = resumer.IsApplicationSaved(
-      application->policy_app_id(), application->mac_address());
-
-  // If app is in resuming state
-  // DisplayCapabilitiesBuilder has to collect all the information
-  // from incoming HMI notifications and send only one notification
-  // to mobile app, even if hash does not match, which means that app data
-  // will not be resumed, notification should be sent for default window as
-  // it will be resumed in any case
-  if (resumption || is_app_saved_in_resumption) {
-    resumer.StartWaitingForDisplayCapabilitiesUpdate(application);
-  }
-
   AppHmiTypes hmi_types;
   if ((*message_)[strings::msg_params].keyExists(strings::app_hmi_type)) {
     smart_objects::SmartArray* hmi_types_ptr =
@@ -898,42 +982,169 @@ void RegisterAppInterfaceRequest::SendRegisterAppInterfaceResponseToMobile(
   response_params[strings::icon_resumed] =
       file_system::FileExists(application->app_icon_path());
 
-  SendResponse(true, result_code, add_info.c_str(), &response_params);
-  if (msg_params.keyExists(strings::app_hmi_type)) {
-    GetPolicyHandler().SetDefaultHmiTypes(application->device(),
-                                          application->policy_app_id(),
-                                          &(msg_params[strings::app_hmi_type]));
+  // copying is needed because by the time
+  // SendRegisterAppInterfaceResponseToMobile() is called from callback
+  // in Run(), request object is deleted, which results in SDL crash.
+  // to prevent that, FinishSendingRegisterAppInterfaceToMobile() method
+  // is created which safely concludes this operation
+  smart_objects::SmartObject msg_params_copy = (*message_)[strings::msg_params];
+
+  SendResponse(true, result_code_, response_info_.c_str(), &response_params);
+
+  FinishSendingRegisterAppInterfaceToMobile(
+      msg_params_copy, application_manager_, key, notify_upd_manager);
+}
+
+void RegisterAppInterfaceRequest::SendRegisterAppInterfaceResponseToMobile(
+    ApplicationType app_type, const std::string& add_info) {
+  LOG4CXX_AUTO_TRACE(logger_);
+  smart_objects::SmartObject response_params(smart_objects::SmartType_Map);
+
+  const HMICapabilities& hmi_capabilities = hmi_capabilities_;
+
+  const uint32_t key = connection_key();
+  ApplicationSharedPtr application = application_manager_.application(key);
+
+  response_params[strings::sync_msg_version][strings::major_version] =
+      major_version;  // From generated file
+                      // interfaces/generated_msg_version.h
+  response_params[strings::sync_msg_version][strings::minor_version] =
+      minor_version;  // From generated file
+                      // interfaces/generated_msg_version.h
+  response_params[strings::sync_msg_version][strings::patch_version] =
+      patch_version;  // From generated file
+                      // interfaces/generated_msg_version.h
+
+  const smart_objects::SmartObject& msg_params =
+      (*message_)[strings::msg_params];
+
+  if (HmiInterfaces::STATE_NOT_AVAILABLE !=
+      application_manager_.hmi_interfaces().GetInterfaceState(
+          HmiInterfaces::HMI_INTERFACE_TTS)) {
+    FillTTSRelatedFields(response_params, hmi_capabilities);
   }
 
-  // Default HMI level should be set before any permissions validation, since it
-  // relies on HMI level.
-  application_manager_.OnApplicationRegistered(application);
-
-  auto send_rc_status = [application](plugin_manager::RPCPlugin& plugin) {
-    plugin.OnApplicationEvent(plugin_manager::kRCStatusChanged, application);
-  };
-  application_manager_.ApplyFunctorForEachPlugin(send_rc_status);
-
-  SendOnAppRegisteredNotificationToHMI(
-      application, resumption, need_restore_vr);
-  (*notify_upd_manager)();
-
-  // Start PTU after successfull registration
-  // Sends OnPermissionChange notification to mobile right after RAI response
-  // and HMI level set-up
-  GetPolicyHandler().OnAppRegisteredOnMobile(application->mac_address(),
-                                             application->policy_app_id());
-
-  if (result_code != mobile_apis::Result::RESUME_FAILED &&
-      application->is_app_data_resumption_allowed()) {
-    resumer.StartResumption(application, hash_id);
-  } else if (is_app_saved_in_resumption) {
-    resumer.StartResumptionOnlyHMILevel(application);
+  if (HmiInterfaces::STATE_NOT_AVAILABLE !=
+      application_manager_.hmi_interfaces().GetInterfaceState(
+          HmiInterfaces::HMI_INTERFACE_VR)) {
+    FillVRRelatedFields(response_params, hmi_capabilities);
   }
 
-  // By default app subscribed to CUSTOM_BUTTON
-  SendSubscribeCustomButtonNotification();
-  SendChangeRegistrationOnHMI(application);
+  if (HmiInterfaces::STATE_NOT_AVAILABLE !=
+      application_manager_.hmi_interfaces().GetInterfaceState(
+          HmiInterfaces::HMI_INTERFACE_UI)) {
+    FillUIRelatedFields(response_params, hmi_capabilities);
+  }
+
+  if (HmiInterfaces::STATE_NOT_AVAILABLE !=
+      application_manager_.hmi_interfaces().GetInterfaceState(
+          HmiInterfaces::HMI_INTERFACE_VehicleInfo)) {
+    FillVIRelatedFields(response_params, hmi_capabilities);
+  }
+
+  if (hmi_capabilities.button_capabilities()) {
+    response_params[hmi_response::button_capabilities] =
+        *hmi_capabilities.button_capabilities();
+  }
+
+  if (hmi_capabilities.soft_button_capabilities()) {
+    response_params[hmi_response::soft_button_capabilities] =
+        *hmi_capabilities.soft_button_capabilities();
+  }
+
+  if (hmi_capabilities.preset_bank_capabilities()) {
+    response_params[hmi_response::preset_bank_capabilities] =
+        *hmi_capabilities.preset_bank_capabilities();
+  }
+
+  if (hmi_capabilities.hmi_zone_capabilities()) {
+    if (smart_objects::SmartType_Array ==
+        hmi_capabilities.hmi_zone_capabilities()->getType()) {
+      // hmi_capabilities json contains array and HMI response object
+      response_params[hmi_response::hmi_zone_capabilities] =
+          *hmi_capabilities.hmi_zone_capabilities();
+    } else {
+      response_params[hmi_response::hmi_zone_capabilities][0] =
+          *hmi_capabilities.hmi_zone_capabilities();
+    }
+  }
+
+  if (hmi_capabilities.pcm_stream_capabilities()) {
+    response_params[strings::pcm_stream_capabilities] =
+        *hmi_capabilities.pcm_stream_capabilities();
+  }
+
+  const std::vector<uint32_t>& diag_modes =
+      application_manager_.get_settings().supported_diag_modes();
+  if (!diag_modes.empty()) {
+    std::vector<uint32_t>::const_iterator it = diag_modes.begin();
+    uint32_t index = 0;
+    for (; it != diag_modes.end(); ++it) {
+      response_params[strings::supported_diag_modes][index] = *it;
+      ++index;
+    }
+  }
+
+  response_params[strings::sdl_version] =
+      application_manager_.get_settings().sdl_version();
+  const std::string ccpu_version = hmi_capabilities_.ccpu_version();
+  if (!ccpu_version.empty()) {
+    response_params[strings::system_software_version] = ccpu_version;
+  }
+
+  if (ApplicationType::kSwitchedApplicationWrongHashId == app_type) {
+    LOG4CXX_DEBUG(logger_,
+                  "Application has been switched from another transport, "
+                  "but doesn't have correct hashID.");
+
+    application_manager::DeleteApplicationData(application,
+                                               application_manager_);
+
+    SendResponse(
+        true, mobile_apis::Result::RESUME_FAILED, NULL, &response_params);
+    return;
+  }
+
+  if (ApplicationType::kSwitchedApplicationHashOk == app_type) {
+    LOG4CXX_DEBUG(logger_,
+                  "Application has been switched from another transport "
+                  "and has correct hashID.");
+    SendResponse(true, mobile_apis::Result::SUCCESS, NULL, &response_params);
+    return;
+  }
+
+  response_info_ += add_info;
+
+  AppHmiTypes hmi_types;
+  if ((*message_)[strings::msg_params].keyExists(strings::app_hmi_type)) {
+    smart_objects::SmartArray* hmi_types_ptr =
+        (*message_)[strings::msg_params][strings::app_hmi_type].asArray();
+    DCHECK_OR_RETURN_VOID(hmi_types_ptr);
+    SmartArrayValueExtractor extractor;
+    if (hmi_types_ptr && 0 < hmi_types_ptr->size()) {
+      std::transform(hmi_types_ptr->begin(),
+                     hmi_types_ptr->end(),
+                     std::back_inserter(hmi_types),
+                     extractor);
+    }
+  }
+  policy::StatusNotifier notify_upd_manager = policy_handler_.AddApplication(
+      application->mac_address(), application->policy_app_id(), hmi_types);
+
+  response_params[strings::icon_resumed] =
+      file_system::FileExists(application->app_icon_path());
+
+  // copying is needed because by the time
+  // SendRegisterAppInterfaceResponseToMobile() is called from callback
+  // in Run(), request object is deleted, which results in SDL crash.
+  // to prevent that, FinishSendingRegisterAppInterfaceToMobile() method
+  // is created which safely concludes this operation
+  smart_objects::SmartObject msg_params_copy = msg_params;
+
+  SendResponse(true, result_code_, response_info_.c_str(), &response_params);
+
+  FinishSendingRegisterAppInterfaceToMobile(
+      msg_params_copy, application_manager_, key, notify_upd_manager);
 }
 
 void RegisterAppInterfaceRequest::SendChangeRegistration(
@@ -969,7 +1180,7 @@ void RegisterAppInterfaceRequest::SendChangeRegistrationOnHMI(
 }
 
 void RegisterAppInterfaceRequest::SendOnAppRegisteredNotificationToHMI(
-    ApplicationConstSharedPtr app, bool resumption, bool need_restore_vr) {
+    ApplicationConstSharedPtr app, bool resumption) {
   using namespace smart_objects;
   SmartObjectSPtr notification = std::make_shared<SmartObject>(SmartType_Map);
   if (!notification) {
@@ -990,7 +1201,7 @@ void RegisterAppInterfaceRequest::SendOnAppRegisteredNotificationToHMI(
   // Due to current requirements in case when we're in resumption mode
   // we have to always send resumeVRGrammar field.
   if (resumption) {
-    msg_params[strings::resume_vr_grammars] = need_restore_vr;
+    msg_params[strings::resume_vr_grammars] = resumption;
   }
 
   if (app->vr_synonyms()) {
@@ -1483,10 +1694,10 @@ bool RegisterAppInterfaceRequest::IsApplicationSwitched() {
   application_manager_.ProcessReconnection(app, connection_key());
   SendRegisterAppInterfaceResponseToMobile(app_type);
 
-  MessageHelper::SendHMIStatusNotification(
-      app,
-      mobile_apis::PredefinedWindows::DEFAULT_WINDOW,
-      application_manager_);
+  auto notification = MessageHelper::CreateHMIStatusNotification(
+      app, mobile_apis::PredefinedWindows::DEFAULT_WINDOW);
+  application_manager_.GetRPCService().ManageMobileCommand(notification,
+                                                           SOURCE_SDL);
 
   application_manager_.OnApplicationSwitched(app);
 

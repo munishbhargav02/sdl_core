@@ -101,6 +101,15 @@ class RegisterAppInterfaceRequest
    **/
   void SendRegisterAppInterfaceResponseToMobile(ApplicationType app_type);
 
+  /**
+   * @brief Prepares and sends RegisterAppInterface response to mobile
+   * considering application type
+   * @param app_type Type of application
+   * @param add_info - additional information to be sent to mobile app
+   **/
+  void SendRegisterAppInterfaceResponseToMobile(ApplicationType app_type,
+                                                const std::string& add_info);
+
   smart_objects::SmartObjectSPtr GetLockScreenIconUrlNotification(
       const uint32_t connection_key, app_mngr::ApplicationSharedPtr app);
 
@@ -127,13 +136,9 @@ class RegisterAppInterfaceRequest
    * @param app application with changed HMI status
    * @param resumption If true, resumption-related parameters will be sent to
    * the HMI
-   * @param need_restore_vr If resumption is true, whether or not VR commands
-   *should be resumed
    **/
   void SendOnAppRegisteredNotificationToHMI(
-      app_mngr::ApplicationConstSharedPtr app,
-      bool resumption = false,
-      bool need_restore_vr = false);
+      app_mngr::ApplicationConstSharedPtr app, bool resumption);
 
   /**
    * @brief Check new ID along with known mobile application ID
@@ -236,7 +241,41 @@ class RegisterAppInterfaceRequest
       connection_handler::DeviceHandle* device_id = nullptr,
       std::string* mac_address = nullptr) const;
 
- private:
+  /**
+   * @brief WaitForHMIIsReady blocking function. Waits for HMI be ready for
+   * requests processing
+   */
+  void WaitForHMIIsReady();
+
+  /**
+   * @brief FillApplicationParams set app application attributes from the RAI
+   * request
+   * @param application applicaiton to fill params
+   */
+  void FillApplicationParams(
+      application_manager::ApplicationSharedPtr application);
+
+  /**
+   * @brief SetupAppDeviceInfo add applicaiton device information to policies
+   * @param application applicaiton to process
+   */
+  void SetupAppDeviceInfo(
+      application_manager::ApplicationSharedPtr application);
+
+  /**
+   * @brief ApplicationDataShouldBeResumed check if application data should be
+   * resumed
+   * @return result of possible conditions for resumptions
+   */
+  mobile_apis::Result::eType ApplicationDataShouldBeResumed(
+      std::string& add_info);
+
+  /**
+   * @brief CheckLanguage check if language in RAI matches hmi_capabilities
+   * Setup result_code variable in case of does not match
+   */
+  void CheckLanguage();
+
   std::string response_info_;
   mobile_apis::Result::eType result_code_;
   connection_handler::DeviceHandle device_handle_;
