@@ -98,10 +98,13 @@ class RegisterAppInterfaceRequest
    * @brief Prepares and sends RegisterAppInterface response to mobile
    * considering application type
    * @param app_type Type of application
+   * @param status_notifier pointer to status notifier callback function
    * @param add_info - additional information to be sent to mobile app
    **/
-  void SendRegisterAppInterfaceResponseToMobile(ApplicationType app_type,
-                                                const std::string& add_info);
+  void SendRegisterAppInterfaceResponseToMobile(
+      ApplicationType app_type,
+      policy::StatusNotifier status_notifier,
+      const std::string& add_info);
 
   smart_objects::SmartObjectSPtr GetLockScreenIconUrlNotification(
       const uint32_t connection_key, app_mngr::ApplicationSharedPtr app);
@@ -262,6 +265,15 @@ class RegisterAppInterfaceRequest
    */
   mobile_apis::Result::eType ApplicationDataShouldBeResumed(
       std::string& add_info);
+
+  /**
+   * @brief AddApplicationDataToPolicy adds specified application to policy
+   * database and returns a callback with extra actions to be done if required
+   * @param application pointer to application to add
+   * @return callback with extra actions after adding specified application
+   */
+  policy::StatusNotifier AddApplicationDataToPolicy(
+      application_manager::ApplicationSharedPtr application);
 
   /**
    * @brief CheckLanguage check if language in RAI matches hmi_capabilities

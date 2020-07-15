@@ -367,6 +367,29 @@ RegisterAppInterfaceRequest::ApplicationDataShouldBeResumed(
   return result_code_;
 }
 
+policy::StatusNotifier RegisterAppInterfaceRequest::AddApplicationDataToPolicy(
+    application_manager::ApplicationSharedPtr application) {
+  LOG4CXX_AUTO_TRACE(logger_);
+
+  AppHmiTypes hmi_types;
+  if ((*message_)[strings::msg_params].keyExists(strings::app_hmi_type)) {
+    smart_objects::SmartArray* hmi_types_ptr =
+        (*message_)[strings::msg_params][strings::app_hmi_type].asArray();
+    if (hmi_types_ptr) {
+      SmartArrayValueExtractor extractor;
+      if (hmi_types_ptr && 0 < hmi_types_ptr->size()) {
+        std::transform(hmi_types_ptr->begin(),
+                       hmi_types_ptr->end(),
+                       std::back_inserter(hmi_types),
+                       extractor);
+      }
+    }
+  }
+
+  return policy_handler_.AddApplication(
+      application->mac_address(), application->policy_app_id(), hmi_types);
+}
+
 void RegisterAppInterfaceRequest::CheckLanguage() {
   ApplicationSharedPtr application =
       application_manager_.application(connection_key());
@@ -415,7 +438,10 @@ void FinishSendingRegisterAppInterfaceToMobile(
   // Default HMI level should be set before any permissions validation, since
   // it relies on HMI level.
   app_manager.OnApplicationRegistered(application);
-  (*notify_upd_manager)();
+
+  if (notify_upd_manager) {
+    (*notify_upd_manager)();
+  }
 
   auto send_rc_status = [application](plugin_manager::RPCPlugin& plugin) {
     plugin.OnApplicationEvent(plugin_manager::kRCStatusChanged, application);
@@ -642,8 +668,10 @@ void RegisterAppInterfaceRequest::Run() {
     // Use module version as negotiated version
     application->set_msg_version(module_version);
   }
+
   FillApplicationParams(application);
   SetupAppDeviceInfo(application);
+  auto status_notifier = AddApplicationDataToPolicy(application);
 
   std::string add_info;
   const auto resume_data_result = ApplicationDataShouldBeResumed(add_info);
@@ -669,13 +697,13 @@ void RegisterAppInterfaceRequest::Run() {
     const auto& msg_params = (*message_)[strings::msg_params];
     const auto& hash_id = msg_params[strings::hash_id].asString();
     LOG4CXX_WARN(logger_, "Start Data Resumption");
-    auto send_response = [this, application](
+    auto send_response = [this, application, status_notifier](
                              mobile_apis::Result::eType result_code,
                              const std::string info) {
       LOG4CXX_DEBUG(logger_, "Invoking lambda callback for: " << this);
       result_code_ = result_code;
-      SendRegisterAppInterfaceResponseToMobile(ApplicationType::kNewApplication,
-                                               info);
+      SendRegisterAppInterfaceResponseToMobile(
+          ApplicationType::kNewApplication, status_notifier, info);
       application->UpdateHash();
     };
 
@@ -690,8 +718,8 @@ void RegisterAppInterfaceRequest::Run() {
   }
   CheckLanguage();
 
-  SendRegisterAppInterfaceResponseToMobile(ApplicationType::kNewApplication,
-                                           add_info);
+  SendRegisterAppInterfaceResponseToMobile(
+      ApplicationType::kNewApplication, status_notifier, add_info);
   smart_objects::SmartObjectSPtr so =
       GetLockScreenIconUrlNotification(connection_key(), application);
   rpc_service_.ManageMobileCommand(so, SOURCE_SDL);
@@ -847,7 +875,9 @@ void FillUIRelatedFields(smart_objects::SmartObject& response_params,
 }
 
 void RegisterAppInterfaceRequest::SendRegisterAppInterfaceResponseToMobile(
-    ApplicationType app_type, const std::string& add_info) {
+    ApplicationType app_type,
+    policy::StatusNotifier status_notifier,
+    const std::string& add_info) {
   LOG4CXX_AUTO_TRACE(logger_);
   smart_objects::SmartObject response_params(smart_objects::SmartType_Map);
 
@@ -966,22 +996,6 @@ void RegisterAppInterfaceRequest::SendRegisterAppInterfaceResponseToMobile(
 
   response_info_ += add_info;
 
-  AppHmiTypes hmi_types;
-  if ((*message_)[strings::msg_params].keyExists(strings::app_hmi_type)) {
-    smart_objects::SmartArray* hmi_types_ptr =
-        (*message_)[strings::msg_params][strings::app_hmi_type].asArray();
-    DCHECK_OR_RETURN_VOID(hmi_types_ptr);
-    SmartArrayValueExtractor extractor;
-    if (hmi_types_ptr && 0 < hmi_types_ptr->size()) {
-      std::transform(hmi_types_ptr->begin(),
-                     hmi_types_ptr->end(),
-                     std::back_inserter(hmi_types),
-                     extractor);
-    }
-  }
-  policy::StatusNotifier notify_upd_manager = policy_handler_.AddApplication(
-      application->mac_address(), application->policy_app_id(), hmi_types);
-
   response_params[strings::icon_resumed] =
       file_system::FileExists(application->app_icon_path());
 
@@ -995,7 +1009,7 @@ void RegisterAppInterfaceRequest::SendRegisterAppInterfaceResponseToMobile(
   SendResponse(true, result_code_, response_info_.c_str(), &response_params);
 
   FinishSendingRegisterAppInterfaceToMobile(
-      msg_params_copy, application_manager_, key, notify_upd_manager);
+      msg_params_copy, application_manager_, key, status_notifier);
 }
 
 void RegisterAppInterfaceRequest::SendChangeRegistration(
@@ -1545,7 +1559,8 @@ bool RegisterAppInterfaceRequest::IsApplicationSwitched() {
   application_manager_.ProcessReconnection(app, connection_key());
 
   const std::string additional_info;
-  SendRegisterAppInterfaceResponseToMobile(app_type, additional_info);
+  SendRegisterAppInterfaceResponseToMobile(
+      app_type, policy::StatusNotifier(), additional_info);
 
   auto notification = MessageHelper::CreateHMIStatusNotification(
       app, mobile_apis::PredefinedWindows::DEFAULT_WINDOW);
