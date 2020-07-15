@@ -1,5 +1,5 @@
 [![Slack Status](http://sdlslack.herokuapp.com/badge.svg)](http://slack.smartdevicelink.com)
-[![Build Status](http://opensdl-jenkins.luxoft.com:8080/view/develop/job/develop_nightly_coverage/badge/icon)](http://opensdl-jenkins.luxoft.com:8080/view/develop/job/develop_nightly_coverage/)
+[![Build Status](https://opensdl-jenkins.luxoft.com/view/develop/job/develop_nightly_coverage/badge/icon)](https://opensdl-jenkins.luxoft.com/view/develop/job/develop_nightly_coverage/)
 
 # SmartDeviceLink (SDL)
 
