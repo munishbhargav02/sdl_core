@@ -537,13 +537,6 @@ bool ResumeCtrlImpl::StartResumption(ApplicationSharedPtr application,
                           << " received hash = " << hash);
   application->set_is_resuming(true);
 
-  if (!application->is_cloud_app()) {
-    // Default HMI Level is already set before resumption in
-    // ApplicationManager::OnApplicationRegistered, and handling low bandwidth
-    // transports doesn't apply to cloud apps, so this step can be skipped for
-    // such apps
-    SetupDefaultHMILevel(application);
-  }
   smart_objects::SmartObject saved_app;
   const std::string& device_mac = application->mac_address();
   bool result = resumption_storage_->GetSavedApplication(
