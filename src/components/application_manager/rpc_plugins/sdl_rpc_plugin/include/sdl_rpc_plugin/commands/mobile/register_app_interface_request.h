@@ -98,13 +98,6 @@ class RegisterAppInterfaceRequest
    * @brief Prepares and sends RegisterAppInterface response to mobile
    * considering application type
    * @param app_type Type of application
-   **/
-  void SendRegisterAppInterfaceResponseToMobile(ApplicationType app_type);
-
-  /**
-   * @brief Prepares and sends RegisterAppInterface response to mobile
-   * considering application type
-   * @param app_type Type of application
    * @param add_info - additional information to be sent to mobile app
    **/
   void SendRegisterAppInterfaceResponseToMobile(ApplicationType app_type,
