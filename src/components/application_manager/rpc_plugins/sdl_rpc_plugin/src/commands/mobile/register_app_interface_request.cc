@@ -186,7 +186,10 @@ RegisterAppInterfaceRequest::RegisterAppInterfaceRequest(
                          rpc_service,
                          hmi_capabilities,
                          policy_handler)
-    , result_code_(mobile_apis::Result::INVALID_ENUM)
+    , are_tts_chunks_invalid_(false)
+    , are_hmi_types_invalid_(false)
+    , is_resumption_failed_(false)
+    , is_wrong_language_(false)
     , device_handle_(0) {}
 
 RegisterAppInterfaceRequest::~RegisterAppInterfaceRequest() {}
@@ -240,7 +243,7 @@ void RegisterAppInterfaceRequest::FillApplicationParams(
           logger_,
           "MessageHelper::VerifyTtsFiles return " << verification_result);
       response_info_ = "One or more files needed for tts_name are not present";
-      result_code_ = mobile_apis::Result::WARNINGS;
+      are_tts_chunks_invalid_ = true;
     }
     application->set_tts_name(tts_name);
   }
@@ -315,8 +318,7 @@ void RegisterAppInterfaceRequest::SetupAppDeviceInfo(
   GetPolicyHandler().SetDeviceInfo(device_mac, device_info);
 }
 
-mobile_apis::Result::eType
-RegisterAppInterfaceRequest::ApplicationDataShouldBeResumed(
+bool RegisterAppInterfaceRequest::ApplicationDataShouldBeResumed(
     std::string& add_info) {
   LOG4CXX_AUTO_TRACE(logger_);
   const auto& msg_params = (*message_)[strings::msg_params];
@@ -331,26 +333,27 @@ RegisterAppInterfaceRequest::ApplicationDataShouldBeResumed(
 
   if (!resumption) {
     LOG4CXX_DEBUG(logger_, "Hash id is missing, no resumption required");
-    return mobile_apis::Result::RESUME_FAILED;
+    return false;
   }
 
   if (!resumer.CheckApplicationHash(application, hash_id)) {
     LOG4CXX_WARN(logger_, "Hash from RAI does not match to saved resume data.");
     add_info = "Hash from RAI does not match to saved resume data.";
-    result_code_ = mobile_apis::Result::RESUME_FAILED;
+    is_resumption_failed_ = true;
+    return false;
+  }
 
-  } else if (!resumer.CheckPersistenceFilesForResumption(application)) {
+  if (!resumer.CheckPersistenceFilesForResumption(application)) {
     LOG4CXX_WARN(logger_, "Persistent data is missing.");
     add_info = "Persistent data is missing.";
-    result_code_ = mobile_apis::Result::RESUME_FAILED;
-
-  } else {
-    LOG4CXX_WARN(logger_, "Resume succeeded.");
-    add_info = "Resume succeeded.";
-    application->set_app_data_resumption_allowance(true);
-    application->set_is_resuming(true);
-    result_code_ = mobile_apis::Result::SUCCESS;
+    is_resumption_failed_ = true;
+    return false;
   }
+
+  LOG4CXX_WARN(logger_, "Resume succeeded.");
+  add_info = "Resume succeeded.";
+  application->set_app_data_resumption_allowance(true);
+  application->set_is_resuming(true);
 
   // In case application exist in resumption we need to send resumeVrgrammars
   const bool is_app_saved_in_resumption = resumer.IsApplicationSaved(
@@ -366,7 +369,27 @@ RegisterAppInterfaceRequest::ApplicationDataShouldBeResumed(
     resumer.StartWaitingForDisplayCapabilitiesUpdate(application);
   }
 
-  return result_code_;
+  return true;
+}
+
+mobile_apis::Result::eType
+RegisterAppInterfaceRequest::CalculateFinalResultCode() const {
+  if (is_wrong_language_) {
+    LOG4CXX_DEBUG(logger_, "Language was wrong");
+    return mobile_apis::Result::WRONG_LANGUAGE;
+  }
+
+  if (are_hmi_types_invalid_ || are_tts_chunks_invalid_) {
+    LOG4CXX_DEBUG(logger_, "HMI types or TTS chunks are invalid");
+    return mobile_apis::Result::WARNINGS;
+  }
+
+  if (is_resumption_failed_) {
+    LOG4CXX_DEBUG(logger_, "Resumption has been failed");
+    return mobile_apis::Result::RESUME_FAILED;
+  }
+
+  return mobile_apis::Result::SUCCESS;
 }
 
 policy::StatusNotifier RegisterAppInterfaceRequest::AddApplicationDataToPolicy(
@@ -416,7 +439,7 @@ void RegisterAppInterfaceRequest::CheckLanguage() {
             << " , active UI language code is "
             << hmi_capabilities_.active_ui_language());
 
-    result_code_ = mobile_apis::Result::WRONG_LANGUAGE;
+    is_wrong_language_ = true;
   }
 }
 
@@ -676,9 +699,9 @@ void RegisterAppInterfaceRequest::Run() {
   auto status_notifier = AddApplicationDataToPolicy(application);
 
   std::string add_info;
-  const auto resume_data_result = ApplicationDataShouldBeResumed(add_info);
+  const auto is_resumption_required = ApplicationDataShouldBeResumed(add_info);
   SendOnAppRegisteredNotificationToHMI(
-      application, resume_data_result == mobile_apis::Result::SUCCESS);
+      application, is_resumption_required && !is_resumption_failed_);
 
   // By default app subscribed to CUSTOM_BUTTON
   SendSubscribeCustomButtonNotification();
@@ -690,7 +713,7 @@ void RegisterAppInterfaceRequest::Run() {
   };
   application_manager_.ApplyFunctorForEachPlugin(on_app_registered);
 
-  if (mobile_apis::Result::SUCCESS == resume_data_result) {
+  if (is_resumption_required) {
     application_manager_.updateRequestTimeout(
         connection_key(), correlation_id(), 0);
     sleep(1);
@@ -703,7 +726,10 @@ void RegisterAppInterfaceRequest::Run() {
                              mobile_apis::Result::eType result_code,
                              const std::string info) {
       LOG4CXX_DEBUG(logger_, "Invoking lambda callback for: " << this);
-      result_code_ = result_code;
+      if (result_code != mobile_apis::Result::SUCCESS) {
+        is_resumption_failed_ = true;
+      }
+
       SendRegisterAppInterfaceResponseToMobile(
           ApplicationType::kNewApplication, status_notifier, info);
       application->UpdateHash();
@@ -713,11 +739,6 @@ void RegisterAppInterfaceRequest::Run() {
     return;
   }
 
-  if (mobile_apis::Result::INVALID_ENUM == result_code_) {
-    result_code_ = mobile_apis::Result::SUCCESS;
-  } else {
-    result_code_ = mobile_apis::Result::RESUME_FAILED;
-  }
   CheckLanguage();
 
   SendRegisterAppInterfaceResponseToMobile(
@@ -1007,8 +1028,9 @@ void RegisterAppInterfaceRequest::SendRegisterAppInterfaceResponseToMobile(
   // to prevent that, FinishSendingRegisterAppInterfaceToMobile() method
   // is created which safely concludes this operation
   smart_objects::SmartObject msg_params_copy = msg_params;
+  const auto result_code = CalculateFinalResultCode();
 
-  SendResponse(true, result_code_, response_info_.c_str(), &response_params);
+  SendResponse(true, result_code, response_info_.c_str(), &response_params);
 
   FinishSendingRegisterAppInterfaceToMobile(
       msg_params_copy, application_manager_, key, status_notifier);
@@ -1267,7 +1289,7 @@ mobile_apis::Result::eType RegisterAppInterfaceRequest::CheckWithPolicyData() {
             "Following AppHmiTypes are not present in policy "
             "table:" +
             log;
-        result_code_ = mobile_apis::Result::WARNINGS;
+        are_hmi_types_invalid_ = true;
       }
     }
     // Replace AppHmiTypes in request with values allowed by policy table

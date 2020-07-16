@@ -261,10 +261,16 @@ class RegisterAppInterfaceRequest
   /**
    * @brief ApplicationDataShouldBeResumed check if application data should be
    * resumed
-   * @return result of possible conditions for resumptions
+   * @return true if app data should be resumed, otherwise returns false
    */
-  mobile_apis::Result::eType ApplicationDataShouldBeResumed(
-      std::string& add_info);
+  bool ApplicationDataShouldBeResumed(std::string& add_info);
+
+  /**
+   * @brief CalculateFinalResultCode calculates the final result code
+   * considering all previous conditions
+   * @return calculated result code
+   */
+  mobile_apis::Result::eType CalculateFinalResultCode() const;
 
   /**
    * @brief AddApplicationDataToPolicy adds specified application to policy
@@ -282,7 +288,11 @@ class RegisterAppInterfaceRequest
   void CheckLanguage();
 
   std::string response_info_;
-  mobile_apis::Result::eType result_code_;
+  bool are_tts_chunks_invalid_;
+  bool are_hmi_types_invalid_;
+  bool is_resumption_failed_;
+  bool is_wrong_language_;
+
   connection_handler::DeviceHandle device_handle_;
   std::string device_id_;
 
