@@ -908,16 +908,14 @@ void RegisterAppInterfaceRequest::SendRegisterAppInterfaceResponseToMobile(
 
   const uint32_t key = connection_key();
   ApplicationSharedPtr application = application_manager_.application(key);
+  utils::SemanticVersion negotiated_version = application->msg_version();
 
   response_params[strings::sync_msg_version][strings::major_version] =
-      major_version;  // From generated file
-                      // interfaces/generated_msg_version.h
+      negotiated_version.major_version_;
   response_params[strings::sync_msg_version][strings::minor_version] =
-      minor_version;  // From generated file
-                      // interfaces/generated_msg_version.h
+      negotiated_version.minor_version_;
   response_params[strings::sync_msg_version][strings::patch_version] =
-      patch_version;  // From generated file
-                      // interfaces/generated_msg_version.h
+      negotiated_version.patch_version_;
 
   const smart_objects::SmartObject& msg_params =
       (*message_)[strings::msg_params];
