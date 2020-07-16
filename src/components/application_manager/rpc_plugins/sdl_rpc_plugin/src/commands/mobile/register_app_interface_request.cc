@@ -334,19 +334,6 @@ RegisterAppInterfaceRequest::ApplicationDataShouldBeResumed(
     return mobile_apis::Result::RESUME_FAILED;
   }
 
-  // In case application exist in resumption we need to send resumeVrgrammars
-  const bool is_app_saved_in_resumption = resumer.IsApplicationSaved(
-      application->policy_app_id(), application->mac_address());
-
-  // If app is in resuming state
-  // DisplayCapabilitiesBuilder has to collect all the information
-  // from incoming HMI notifications and send only one notification
-  // to mobile app, even if hash does not match, which means that app data
-  // will not be resumed, notification should be sent for default window as
-  // it will be resumed in any case
-  if (resumption || is_app_saved_in_resumption) {
-    resumer.StartWaitingForDisplayCapabilitiesUpdate(application);
-  }
   if (!resumer.CheckApplicationHash(application, hash_id)) {
     LOG4CXX_WARN(logger_, "Hash from RAI does not match to saved resume data.");
     add_info = "Hash from RAI does not match to saved resume data.";
@@ -364,6 +351,21 @@ RegisterAppInterfaceRequest::ApplicationDataShouldBeResumed(
     application->set_is_resuming(true);
     result_code_ = mobile_apis::Result::SUCCESS;
   }
+
+  // In case application exist in resumption we need to send resumeVrgrammars
+  const bool is_app_saved_in_resumption = resumer.IsApplicationSaved(
+      application->policy_app_id(), application->mac_address());
+
+  // If app is in resuming state
+  // DisplayCapabilitiesBuilder has to collect all the information
+  // from incoming HMI notifications and send only one notification
+  // to mobile app, even if hash does not match, which means that app data
+  // will not be resumed, notification should be sent for default window as
+  // it will be resumed in any case
+  if (resumption || is_app_saved_in_resumption) {
+    resumer.StartWaitingForDisplayCapabilitiesUpdate(application);
+  }
+
   return result_code_;
 }
 
