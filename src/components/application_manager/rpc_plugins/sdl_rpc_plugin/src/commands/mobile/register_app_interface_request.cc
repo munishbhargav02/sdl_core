@@ -717,7 +717,7 @@ void RegisterAppInterfaceRequest::Run() {
     application_manager_.updateRequestTimeout(
         connection_key(), correlation_id(), 0);
     sleep(1);
-    // is_data_resumption_ = true;
+
     auto& resume_ctrl = application_manager_.resume_controller();
     const auto& msg_params = (*message_)[strings::msg_params];
     const auto& hash_id = msg_params[strings::hash_id].asString();
@@ -733,9 +733,11 @@ void RegisterAppInterfaceRequest::Run() {
       SendRegisterAppInterfaceResponseToMobile(
           ApplicationType::kNewApplication, status_notifier, info);
       application->UpdateHash();
+      SendDriverDistractionAndIconUrlNotifications(connection_key(),
+                                                   application);
     };
-
     resume_ctrl.StartResumption(application, hash_id, send_response);
+
     return;
   }
 
@@ -743,13 +745,17 @@ void RegisterAppInterfaceRequest::Run() {
 
   SendRegisterAppInterfaceResponseToMobile(
       ApplicationType::kNewApplication, status_notifier, add_info);
+  SendDriverDistractionAndIconUrlNotifications(connection_key(), application);
+}
+
+void RegisterAppInterfaceRequest::SendDriverDistractionAndIconUrlNotifications(
+    const uint32_t connection_key, ApplicationSharedPtr app) {
   smart_objects::SmartObjectSPtr so =
-      GetLockScreenIconUrlNotification(connection_key(), application);
+      GetLockScreenIconUrlNotification(connection_key, app);
   rpc_service_.ManageMobileCommand(so, SOURCE_SDL);
-  application_manager_.SendDriverDistractionState(application);
+  application_manager_.SendDriverDistractionState(app);
   // Create onSystemRequest to mobile to obtain cloud app icons
-  application_manager_.SendGetIconUrlNotifications(connection_key(),
-                                                   application);
+  application_manager_.SendGetIconUrlNotifications(connection_key, app);
 }
 
 smart_objects::SmartObjectSPtr
@@ -1276,6 +1282,7 @@ mobile_apis::Result::eType RegisterAppInterfaceRequest::CheckWithPolicyData() {
     if (message[strings::msg_params].keyExists(strings::app_hmi_type)) {
       // If AppHmiTypes are partially same, the system should allow those listed
       // in the policy table and send warning info on missed values
+
       smart_objects::SmartArray app_types =
           *(message[strings::msg_params][strings::app_hmi_type].asArray());
 

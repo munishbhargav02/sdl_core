@@ -106,6 +106,9 @@ class RegisterAppInterfaceRequest
       policy::StatusNotifier status_notifier,
       const std::string& add_info);
 
+  void SendDriverDistractionAndIconUrlNotifications(
+      const uint32_t connection_key, app_mngr::ApplicationSharedPtr app);
+
   smart_objects::SmartObjectSPtr GetLockScreenIconUrlNotification(
       const uint32_t connection_key, app_mngr::ApplicationSharedPtr app);
 
