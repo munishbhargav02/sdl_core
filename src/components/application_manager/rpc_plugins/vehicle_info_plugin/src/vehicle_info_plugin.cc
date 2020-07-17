@@ -160,22 +160,6 @@ void VehicleInfoPlugin::UnsubscribeFromRemovedVDItems() {
   application_manager_->GetRPCService().ManageHMICommand(message);
 }
 
-bool IsOtherAppAlreadySubscribedFor(
-    const std::string& ivi_name,
-    const application_manager::ApplicationManager& app_mngr,
-    const uint32_t current_app_id) {
-  auto applications = app_mngr.applications();
-
-  for (auto& app : applications.GetData()) {
-    auto& ext = VehicleInfoAppExtension::ExtractVIExtension(*app);
-    if (ext.isSubscribedToVehicleInfo(ivi_name) &&
-        (app->app_id() != current_app_id)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 void VehicleInfoPlugin::ProcessResumptionSubscription(
     application_manager::Application& app,
     VehicleInfoAppExtension& ext,

@@ -443,6 +443,45 @@ void RegisterAppInterfaceRequest::CheckLanguage() {
   }
 }
 
+smart_objects::SmartObjectSPtr GetLockScreenIconUrlNotification(
+    policy::PolicyHandlerInterface& policy_handler,
+    const uint32_t connection_key,
+    ApplicationSharedPtr app) {
+  DCHECK_OR_RETURN(app.get(), smart_objects::SmartObjectSPtr());
+  smart_objects::SmartObjectSPtr message =
+      std::make_shared<smart_objects::SmartObject>(
+          smart_objects::SmartType_Map);
+  (*message)[strings::params][strings::function_id] =
+      mobile_apis::FunctionID::OnSystemRequestID;
+  (*message)[strings::params][strings::connection_key] = connection_key;
+  (*message)[strings::params][strings::message_type] =
+      mobile_apis::messageType::notification;
+  (*message)[strings::params][strings::protocol_type] =
+      application_manager::commands::CommandImpl::mobile_protocol_type_;
+  (*message)[strings::params][strings::protocol_version] =
+      app->protocol_version();
+  (*message)[strings::msg_params][strings::request_type] =
+      mobile_apis::RequestType::LOCK_SCREEN_ICON_URL;
+  (*message)[strings::msg_params][strings::url] =
+      policy_handler.GetLockScreenIconUrl(app->policy_app_id());
+  return message;
+}
+
+void SendDriverDistractionAndIconUrlNotifications(
+    ApplicationManager& app_manager,
+    const uint32_t connection_key,
+    ApplicationSharedPtr app) {
+  policy::PolicyHandlerInterface& policy_handler =
+      app_manager.GetPolicyHandler();
+  smart_objects::SmartObjectSPtr so =
+      GetLockScreenIconUrlNotification(policy_handler, connection_key, app);
+  app_manager.GetRPCService().ManageMobileCommand(
+      so, app_mngr::commands::Command::SOURCE_SDL);
+  app_manager.SendDriverDistractionState(app);
+  // Create onSystemRequest to mobile to obtain cloud app icons
+  app_manager.SendGetIconUrlNotifications(connection_key, app);
+}
+
 void FinishSendingRegisterAppInterfaceToMobile(
     const smart_objects::SmartObject& msg_params,
     ApplicationManager& app_manager,
@@ -478,7 +517,8 @@ void FinishSendingRegisterAppInterfaceToMobile(
   // and HMI level set-up
   policy_handler.OnAppRegisteredOnMobile(application->mac_address(),
                                          application->policy_app_id());
-
+  SendDriverDistractionAndIconUrlNotifications(
+      app_manager, connection_key, application);
   const bool is_app_saved_in_resumption = resume_ctrl.IsApplicationSaved(
       application->policy_app_id(), application->mac_address());
   if (is_app_saved_in_resumption) {
@@ -717,7 +757,7 @@ void RegisterAppInterfaceRequest::Run() {
     application_manager_.updateRequestTimeout(
         connection_key(), correlation_id(), 0);
     sleep(1);
-    // is_data_resumption_ = true;
+
     auto& resume_ctrl = application_manager_.resume_controller();
     const auto& msg_params = (*message_)[strings::msg_params];
     const auto& hash_id = msg_params[strings::hash_id].asString();
@@ -734,8 +774,8 @@ void RegisterAppInterfaceRequest::Run() {
           ApplicationType::kNewApplication, status_notifier, info);
       application->UpdateHash();
     };
-
     resume_ctrl.StartResumption(application, hash_id, send_response);
+
     return;
   }
 
@@ -743,34 +783,6 @@ void RegisterAppInterfaceRequest::Run() {
 
   SendRegisterAppInterfaceResponseToMobile(
       ApplicationType::kNewApplication, status_notifier, add_info);
-  smart_objects::SmartObjectSPtr so =
-      GetLockScreenIconUrlNotification(connection_key(), application);
-  rpc_service_.ManageMobileCommand(so, SOURCE_SDL);
-  application_manager_.SendDriverDistractionState(application);
-  // Create onSystemRequest to mobile to obtain cloud app icons
-  application_manager_.SendGetIconUrlNotifications(connection_key(),
-                                                   application);
-}
-
-smart_objects::SmartObjectSPtr
-RegisterAppInterfaceRequest::GetLockScreenIconUrlNotification(
-    const uint32_t connection_key, ApplicationSharedPtr app) {
-  DCHECK_OR_RETURN(app.get(), smart_objects::SmartObjectSPtr());
-  smart_objects::SmartObjectSPtr message =
-      std::make_shared<smart_objects::SmartObject>(
-          smart_objects::SmartType_Map);
-  (*message)[strings::params][strings::function_id] =
-      mobile_apis::FunctionID::OnSystemRequestID;
-  (*message)[strings::params][strings::connection_key] = connection_key;
-  (*message)[strings::params][strings::message_type] =
-      mobile_apis::messageType::notification;
-  (*message)[strings::params][strings::protocol_type] = mobile_protocol_type_;
-  (*message)[strings::params][strings::protocol_version] = protocol_version_;
-  (*message)[strings::msg_params][strings::request_type] =
-      mobile_apis::RequestType::LOCK_SCREEN_ICON_URL;
-  (*message)[strings::msg_params][strings::url] =
-      GetPolicyHandler().GetLockScreenIconUrl(app->policy_app_id());
-  return message;
 }
 
 void FillVRRelatedFields(smart_objects::SmartObject& response_params,
@@ -1276,6 +1288,7 @@ mobile_apis::Result::eType RegisterAppInterfaceRequest::CheckWithPolicyData() {
     if (message[strings::msg_params].keyExists(strings::app_hmi_type)) {
       // If AppHmiTypes are partially same, the system should allow those listed
       // in the policy table and send warning info on missed values
+
       smart_objects::SmartArray app_types =
           *(message[strings::msg_params][strings::app_hmi_type].asArray());
 

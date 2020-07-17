@@ -103,7 +103,7 @@ void VehicleInfoPendingResumptionHandler::ClearPendingResumptionRequests() {
     freezed_resumptions_.pop();
 
     std::set<std::string> subscriptions =
-        GetExtensionSubscriptions(freezed_resumption.ext);
+        freezed_resumption.ext.Subscriptions();
 
     auto request = CreateSubscribeRequestToHMI(subscriptions);
     const uint32_t cid =
@@ -163,8 +163,7 @@ void VehicleInfoPendingResumptionHandler::on_event(
   freezed_resumptions_.pop();
   resumption::Subscriber subscriber = freezed_resumption.subscriber;
 
-  std::set<std::string> subscriptions =
-      GetExtensionSubscriptions(freezed_resumption.ext);
+  std::set<std::string> subscriptions = freezed_resumption.ext.Subscriptions();
 
   if (!IsResumptionResultSuccessful(subscription_results)) {
     LOG4CXX_DEBUG(logger_, "Resumption of subscriptions is NOT successful");
@@ -243,7 +242,7 @@ void VehicleInfoPendingResumptionHandler::HandleResumptionSubscriptionRequest(
   VehicleInfoAppExtension& ext =
       dynamic_cast<VehicleInfoAppExtension&>(extension);
 
-  std::set<std::string> subscriptions = GetExtensionSubscriptions(ext);
+  std::set<std::string> subscriptions = ext.Subscriptions();
 
   smart_objects::SmartObjectSPtr request =
       CreateSubscribeRequestToHMI(subscriptions);
@@ -278,19 +277,6 @@ void VehicleInfoPendingResumptionHandler::HandleResumptionSubscriptionRequest(
     ResumptionAwaitingHandling frozen_res(app.app_id(), ext, subscriber);
     freezed_resumptions_.push(frozen_res);
   }
-}
-
-std::set<std::string>
-VehicleInfoPendingResumptionHandler::GetExtensionSubscriptions(
-    VehicleInfoAppExtension& extension) {
-  std::set<std::string> subscriptions;
-  for (auto& ivi : application_manager::MessageHelper::vehicle_data()) {
-    const auto it = extension.Subscriptions().find(ivi.first);
-    if (extension.Subscriptions().end() != it) {
-      subscriptions.insert(ivi.first);
-    }
-  }
-  return subscriptions;
 }
 
 smart_objects::SmartObjectSPtr
