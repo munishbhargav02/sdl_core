@@ -28,6 +28,7 @@
 #include <algorithm>
 
 #include "application_manager/application_manager.h"
+#include "application_manager/commands/command_impl.h"
 #include "application_manager/event_engine/event_observer.h"
 #include "application_manager/message_helper.h"
 #include "application_manager/resumption/resumption_data_processor.h"
@@ -42,6 +43,7 @@ using app_mngr::ChoiceSetMap;
 using app_mngr::MessageHelper;
 namespace strings = app_mngr::strings;
 namespace event_engine = app_mngr::event_engine;
+namespace commands = app_mngr::commands;
 
 CREATE_LOGGERPTR_GLOBAL(logger_, "Resumption")
 
@@ -490,11 +492,14 @@ void ResumptionDataProcessor::AddCommands(
   const smart_objects::SmartObject& app_commands =
       saved_app[strings::application_commands];
 
-  for (size_t i = 0; i < app_commands.length(); ++i) {
-    const smart_objects::SmartObject& command = app_commands[i];
+  for (size_t cmd_num = 0; cmd_num < app_commands.length(); ++cmd_num) {
+    const smart_objects::SmartObject& command = app_commands[cmd_num];
     const uint32_t cmd_id = command[strings::cmd_id].asUInt();
+    const uint32_t consecutive_num =
+        commands::CommandImpl::CalcCommandInternalConsecutiveNumber(
+            application);
 
-    application->AddCommand(cmd_id, command);
+    application->AddCommand(consecutive_num, command);
     application->help_prompt_manager().OnVrCommandAdded(
         cmd_id, command, true);  // is_resumption =true
   }
