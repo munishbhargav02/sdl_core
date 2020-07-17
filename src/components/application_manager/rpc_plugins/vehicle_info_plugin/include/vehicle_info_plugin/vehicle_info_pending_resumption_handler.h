@@ -66,9 +66,6 @@ class VehicleInfoPendingResumptionHandler
       std::set<std::string>& subscriptions,
       std::set<std::string>& successful_subscriptions);
 
-  std::set<std::string> GetExtensionSubscriptions(
-      VehicleInfoAppExtension& extension);
-
   smart_objects::SmartObjectSPtr CreateSubscribeRequestToHMI(
       const std::set<std::string>& subscriptions);
 
