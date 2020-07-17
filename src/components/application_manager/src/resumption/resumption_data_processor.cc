@@ -50,7 +50,10 @@ CREATE_LOGGERPTR_GLOBAL(logger_, "Resumption")
 ResumptionDataProcessor::ResumptionDataProcessor(
     app_mngr::ApplicationManager& application_manager)
     : event_engine::EventObserver(application_manager.event_dispatcher())
-    , application_manager_(application_manager) {}
+    , application_manager_(application_manager)
+    , resumption_status_lock_()
+    , register_callbacks_lock_()
+    , request_app_ids_lock_() {}
 
 ResumptionDataProcessor::~ResumptionDataProcessor() {}
 
@@ -74,9 +77,18 @@ void ResumptionDataProcessor::Restore(ApplicationSharedPtr application,
   SetGlobalProperties(application, saved_app);
   AddSubscriptions(application, saved_app);
 
-  if (!resumption_status_[application->app_id()]
-           .list_of_sent_requests.empty()) {
-    register_callbacks_[application->app_id()] = callback;
+  resumption_status_lock_.AcquireForReading();
+  const auto app_id = application->app_id();
+  bool is_requests_list_empty = true;
+  if (resumption_status_.find(app_id) != resumption_status_.end()) {
+    is_requests_list_empty =
+        resumption_status_[app_id].list_of_sent_requests.empty();
+  }
+  resumption_status_lock_.Release();
+
+  if (!is_requests_list_empty) {
+    sync_primitives::AutoWriteLock lock(register_callbacks_lock_);
+    register_callbacks_[app_id] = callback;
   } else {
     LOG4CXX_DEBUG(logger_, "No requests to HMI, resumption is successful");
     callback(mobile_apis::Result::SUCCESS, "Data resumption successful");
@@ -181,6 +193,7 @@ void ResumptionDataProcessor::HandleOnTimeOut(
   uint32_t app_id = 0;
   ApplicationSharedPtr app;
 
+  request_app_ids_lock_.AcquireForReading();
   auto it = std::find_if(
       request_app_ids_.begin(),
       request_app_ids_.end(),
@@ -189,22 +202,29 @@ void ResumptionDataProcessor::HandleOnTimeOut(
         return item.first.function_id == function_id &&
                item.first.correlation_id == static_cast<int32_t>(corr_id);
       });
+
   if (it != request_app_ids_.end()) {
     app_id = it->second;
     app = application_manager_.application(app_id);
   }
+  request_app_ids_lock_.Release();
+
   if (app && app->is_resuming()) {
     LOG4CXX_DEBUG(logger_, "Unsubscribing from event: " << function_id);
     unsubscribe_from_event(function_id);
 
+    register_callbacks_lock_.AcquireForReading();
     auto it = register_callbacks_.find(app_id);
     if (it == register_callbacks_.end()) {
       LOG4CXX_WARN(logger_, "Callback for app_id: " << app_id << " not found");
 
+      register_callbacks_lock_.Release();
       return;
     }
 
     auto callback = it->second;
+    register_callbacks_lock_.Release();
+
     callback(mobile_apis::Result::RESUME_FAILED, "Data resumption failed");
 
     RevertRestoredData(application_manager_.application(app_id));
@@ -227,6 +247,7 @@ void ResumptionDataProcessor::on_event(const event_engine::Event& event) {
                item.first.correlation_id == event.smart_object_correlation_id();
       };
 
+  request_app_ids_lock_.AcquireForReading();
   auto app_id_ptr =
       std::find_if(request_app_ids_.begin(), request_app_ids_.end(), predicate);
 
@@ -236,10 +257,12 @@ void ResumptionDataProcessor::on_event(const event_engine::Event& event) {
                       << event.smart_object_correlation_id()
                       << " and function id: " << event.id()
                       << " was not found.");
+    request_app_ids_lock_.Release();
     return;
   }
 
   const uint32_t app_id = app_id_ptr->second;
+  request_app_ids_lock_.Release();
 
   LOG4CXX_DEBUG(logger_, "app_id is: " << app_id);
 
@@ -252,6 +275,14 @@ void ResumptionDataProcessor::on_event(const event_engine::Event& event) {
                 "Now processing event with function id: "
                     << request_ids.function_id
                     << " correlation id: " << request_ids.correlation_id);
+
+  resumption_status_lock_.AcquireForWriting();
+  if (resumption_status_.find(app_id) == resumption_status_.end()) {
+    LOG4CXX_ERROR(logger_,
+                  "No resumption status info found for app_id: " << app_id);
+    resumption_status_lock_.Release();
+    return;
+  }
 
   ApplicationResumptionStatus& status = resumption_status_[app_id];
   std::vector<ResumptionRequest>& list_of_sent_requests =
@@ -268,6 +299,7 @@ void ResumptionDataProcessor::on_event(const event_engine::Event& event) {
 
   if (list_of_sent_requests.end() == request_ptr) {
     LOG4CXX_ERROR(logger_, "Request not found");
+    resumption_status_lock_.Release();
     return;
   }
 
@@ -282,42 +314,57 @@ void ResumptionDataProcessor::on_event(const event_engine::Event& event) {
     CheckVehicleDataResponse(request_ptr->message, response, status);
   }
 
-  {
-    sync_primitives::AutoLock lock(resumption_data_procesoor_lock_);
-    list_of_sent_requests.erase(request_ptr);
-  }
+  list_of_sent_requests.erase(request_ptr);
 
   if (!list_of_sent_requests.empty()) {
     LOG4CXX_DEBUG(logger_,
                   "Resumption app "
                       << app_id << " not finished . Amount of requests left : "
                       << list_of_sent_requests.size());
+    resumption_status_lock_.Release();
     return;
   }
 
+  const bool successful_resumption =
+      status.error_requests.empty() &&
+      status.unsuccesfull_vehicle_data_subscriptions_.empty();
+
+  resumption_status_lock_.Release();
+
+  register_callbacks_lock_.AcquireForReading();
   auto it = register_callbacks_.find(app_id);
   if (it == register_callbacks_.end()) {
     LOG4CXX_WARN(logger_, "Callback for app_id: " << app_id << " not found");
 
+    register_callbacks_lock_.Release();
     return;
   }
+
   auto callback = it->second;
-  const bool successful_resumption =
-      status.error_requests.empty() &&
-      status.unsuccesfull_vehicle_data_subscriptions_.empty();
+  register_callbacks_lock_.Release();
 
   if (successful_resumption) {
     LOG4CXX_DEBUG(logger_, "Resumption for app " << app_id << " successful");
     callback(mobile_apis::Result::SUCCESS, "Data resumption succesful");
   }
+
   if (!successful_resumption) {
     LOG4CXX_ERROR(logger_, "Resumption for app " << app_id << " failed");
     callback(mobile_apis::Result::RESUME_FAILED, "Data resumption failed");
     RevertRestoredData(application_manager_.application(app_id));
   }
+
+  resumption_status_lock_.AcquireForWriting();
   resumption_status_.erase(app_id);
+  resumption_status_lock_.Release();
+
+  request_app_ids_lock_.AcquireForWriting();
   request_app_ids_.erase(app_id_ptr);
+  request_app_ids_lock_.Release();
+
+  register_callbacks_lock_.AcquireForWriting();
   register_callbacks_.erase(app_id);
+  register_callbacks_lock_.Release();
 }
 
 void ResumptionDataProcessor::RevertRestoredData(
@@ -330,8 +377,14 @@ void ResumptionDataProcessor::RevertRestoredData(
   DeleteChoicesets(application);
   DeleteGlobalProperties(application);
   DeleteSubscriptions(application);
+
+  resumption_status_lock_.AcquireForWriting();
   resumption_status_.erase(application->app_id());
+  resumption_status_lock_.Release();
+
+  register_callbacks_lock_.AcquireForWriting();
   register_callbacks_.erase(application->app_id());
+  register_callbacks_lock_.Release();
 }
 
 void ResumptionDataProcessor::WaitForResponse(
@@ -343,9 +396,14 @@ void ResumptionDataProcessor::WaitForResponse(
                        << request.request_ids.correlation_id);
   subscribe_on_event(request.request_ids.function_id,
                      request.request_ids.correlation_id);
-  sync_primitives::AutoLock lock(resumption_data_procesoor_lock_);
+
+  resumption_status_lock_.AcquireForWriting();
   resumption_status_[app_id].list_of_sent_requests.push_back(request);
+  resumption_status_lock_.Release();
+
+  request_app_ids_lock_.AcquireForWriting();
   request_app_ids_.insert(std::make_pair(request.request_ids, app_id));
+  request_app_ids_lock_.Release();
 }
 
 void ResumptionDataProcessor::ProcessHMIRequest(
@@ -448,11 +506,18 @@ void ResumptionDataProcessor::DeleteSubmenues(
     ApplicationSharedPtr application) {
   LOG4CXX_AUTO_TRACE(logger_);
   const uint32_t app_id = application->app_id();
-  ApplicationResumptionStatus& status = resumption_status_[app_id];
-  auto requests = status.successful_requests;
-  requests.insert(requests.begin(),
-                  status.error_requests.begin(),
-                  status.error_requests.end());
+
+  resumption_status_lock_.AcquireForReading();
+  std::vector<ResumptionRequest> requests;
+  if (resumption_status_.find(app_id) != resumption_status_.end()) {
+    ApplicationResumptionStatus& status = resumption_status_[app_id];
+    requests = status.successful_requests;
+    requests.insert(requests.begin(),
+                    status.error_requests.begin(),
+                    status.error_requests.end());
+  }
+  resumption_status_lock_.Release();
+
   for (auto request : requests) {
     if (hmi_apis::FunctionID::UI_AddSubMenu ==
         request.request_ids.function_id) {
@@ -511,8 +576,14 @@ void ResumptionDataProcessor::AddCommands(
 void ResumptionDataProcessor::DeleteCommands(ApplicationSharedPtr application) {
   LOG4CXX_AUTO_TRACE(logger_);
   const uint32_t app_id = application->app_id();
-  ApplicationResumptionStatus& status = resumption_status_[app_id];
-  auto requests = status.successful_requests;
+
+  resumption_status_lock_.AcquireForReading();
+  std::vector<ResumptionRequest> requests;
+  if (resumption_status_.find(app_id) != resumption_status_.end()) {
+    requests = resumption_status_[app_id].successful_requests;
+  }
+  resumption_status_lock_.Release();
+
   for (auto request : requests) {
     const uint32_t cmd_id =
         request.message[strings::msg_params][strings::cmd_id].asUInt();
@@ -645,18 +716,26 @@ void ResumptionDataProcessor::DeleteGlobalProperties(
   const uint32_t app_id = application->app_id();
   const auto result =
       application_manager_.ResetAllApplicationGlobalProperties(app_id);
-  ApplicationResumptionStatus& status = resumption_status_[app_id];
-  auto check_if_successful = [status](hmi_apis::FunctionID::eType function_id) {
-    for (auto& resumption_request : status.successful_requests) {
-      auto request_func =
-          resumption_request.message[strings::params][strings::function_id]
-              .asInt();
-      if (request_func == function_id) {
-        return true;
-      }
-    }
-    return false;
-  };
+
+  resumption_status_lock_.AcquireForReading();
+  std::vector<ResumptionRequest> requests;
+  if (resumption_status_.find(app_id) != resumption_status_.end()) {
+    requests = resumption_status_[app_id].successful_requests;
+  }
+  resumption_status_lock_.Release();
+
+  auto check_if_successful =
+      [requests](hmi_apis::FunctionID::eType function_id) {
+        for (auto& resumption_request : requests) {
+          auto request_func =
+              resumption_request.message[strings::params][strings::function_id]
+                  .asInt();
+          if (request_func == function_id) {
+            return true;
+          }
+        }
+        return false;
+      };
 
   if (result.HasUIPropertiesReset() &&
       check_if_successful(hmi_apis::FunctionID::UI_SetGlobalProperties)) {
@@ -786,8 +865,12 @@ void ResumptionDataProcessor::DeletePluginsSubscriptions(
     application_manager::ApplicationSharedPtr application) {
   LOG4CXX_AUTO_TRACE(logger_);
 
+  resumption_status_lock_.AcquireForReading();
   auto it = resumption_status_.find(application->app_id());
-  DCHECK_OR_RETURN_VOID(it != resumption_status_.end());
+  if (it == resumption_status_.end()) {
+    resumption_status_lock_.Release();
+    return;
+  }
 
   const ApplicationResumptionStatus& status = it->second;
   smart_objects::SmartObject extension_subscriptions;
@@ -795,6 +878,7 @@ void ResumptionDataProcessor::DeletePluginsSubscriptions(
     LOG4CXX_DEBUG(logger_, "ivi " << ivi << " should be deleted");
     extension_subscriptions[ivi] = true;
   }
+  resumption_status_lock_.Release();
 
   for (auto& extension : application->Extensions()) {
     extension->RevertResumption(extension_subscriptions);
