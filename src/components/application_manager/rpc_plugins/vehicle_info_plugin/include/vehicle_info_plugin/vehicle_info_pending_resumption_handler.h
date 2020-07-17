@@ -75,6 +75,8 @@ class VehicleInfoPendingResumptionHandler
   void ClearPendingResumptionRequests() OVERRIDE;
 
  private:
+  void ClearPendingRequestsMap();
+
   struct ResumptionAwaitingHandling {
     const uint32_t app_id;
     VehicleInfoAppExtension& ext;

@@ -193,9 +193,18 @@ void ResumptionDataProcessor::HandleOnTimeOut(
   }
   if (app && app->is_resuming()) {
     LOG4CXX_DEBUG(logger_, "Unsubscribing from event: " << function_id);
-    auto callback = register_callbacks_[app_id];
-    callback(mobile_apis::Result::RESUME_FAILED, "Data resumption failed");
     unsubscribe_from_event(function_id);
+
+    auto it = register_callbacks_.find(app_id);
+    if (it == register_callbacks_.end()) {
+      LOG4CXX_WARN(logger_, "Callback for app_id: " << app_id << " not found");
+
+      return;
+    }
+
+    auto callback = it->second;
+    callback(mobile_apis::Result::RESUME_FAILED, "Data resumption failed");
+
     RevertRestoredData(application_manager_.application(app_id));
   }
 }
