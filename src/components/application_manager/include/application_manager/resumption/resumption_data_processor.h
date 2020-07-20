@@ -35,7 +35,7 @@
 #include "application_manager/event_engine/event_observer.h"
 #include "application_manager/resumption/resume_ctrl.h"
 #include "smart_objects/smart_object.h"
-#include "utils/lock.h"
+#include "utils/rwlock.h"
 
 namespace resumption {
 
@@ -312,14 +312,24 @@ class ResumptionDataProcessor : public app_mngr::event_engine::EventObserver {
   bool HasSubscriptionsToRestore(
       const smart_objects::SmartObject& saved_app) const;
 
+  app_mngr::ApplicationManager& application_manager_;
+
   /**
    * @brief A map of the IDs and Application Resumption Status for these ID
    **/
-
-  sync_primitives::Lock resumption_data_procesoor_lock_;
-  app_mngr::ApplicationManager& application_manager_;
+  sync_primitives::RWLock resumption_status_lock_;
   std::map<std::int32_t, ApplicationResumptionStatus> resumption_status_;
+
+  /**
+   * @brief A map of callbacks used when resumption is finished
+   */
+  sync_primitives::RWLock register_callbacks_lock_;
   std::map<std::int32_t, ResumeCtrl::ResumptionCallBack> register_callbacks_;
+
+  /**
+   * @brief A map of sent requests and corresponding app_id
+   */
+  sync_primitives::RWLock request_app_ids_lock_;
   std::map<ResumptionRequestIDs, std::uint32_t> request_app_ids_;
 };
 
