@@ -176,18 +176,6 @@ class ResumptionDataProcessor : public app_mngr::event_engine::EventObserver {
   void DeleteCommands(app_mngr::ApplicationSharedPtr application);
 
   /**
-   * @brief Deleting UI commands that have been resumed
-   * @param shared ptr to application
-   */
-  void DeleteUICommands(const ResumptionRequest& request);
-
-  /**
-   * @brief Deleting VR commands that have been resumed
-   * @param app_id application id
-   */
-  void DeleteVRCommands(const ResumptionRequest& request);
-
-  /**
    * @brief AddChoicesets allows to add choice sets for the application
    * which should be resumed
    * @param application application which will be resumed

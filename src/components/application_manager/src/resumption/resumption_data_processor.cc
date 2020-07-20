@@ -574,89 +574,14 @@ void ResumptionDataProcessor::AddCommands(
 }
 
 void ResumptionDataProcessor::DeleteCommands(ApplicationSharedPtr application) {
-  LOG4CXX_AUTO_TRACE(logger_);
-  const uint32_t app_id = application->app_id();
+  app_mngr::CommandsMap cmap = application->commands_map().GetData();
 
-  resumption_status_lock_.AcquireForReading();
-  std::vector<ResumptionRequest> requests;
-  if (resumption_status_.find(app_id) != resumption_status_.end()) {
-    requests = resumption_status_[app_id].successful_requests;
+  for (auto cmd : cmap) {
+    MessageHelper::SendDeleteCommandRequest(
+        cmd.second, application, application_manager_);
+    application->RemoveCommand(cmd.first);
+    application->help_prompt_manager().OnVrCommandDeleted(cmd.first, true);
   }
-  resumption_status_lock_.Release();
-
-  for (auto request : requests) {
-    const uint32_t cmd_id =
-        request.message[strings::msg_params][strings::cmd_id].asUInt();
-
-    if (hmi_apis::FunctionID::UI_AddCommand ==
-        request.request_ids.function_id) {
-      DeleteUICommands(request);
-    }
-    if (hmi_apis::FunctionID::VR_AddCommand ==
-        request.request_ids.function_id) {
-      DeleteVRCommands(request);
-    }
-
-    application->RemoveCommand(cmd_id);
-    application->help_prompt_manager().OnVrCommandDeleted(
-        cmd_id, true);  // is_resumption = true
-  }
-}
-
-void ResumptionDataProcessor::DeleteUICommands(
-    const ResumptionRequest& request) {
-  LOG4CXX_AUTO_TRACE(logger_);
-  smart_objects::SmartObjectSPtr ui_command =
-      MessageHelper::CreateMessageForHMI(
-          hmi_apis::messageType::request,
-          application_manager_.GetNextHMICorrelationID());
-
-  (*ui_command)[strings::params][strings::function_id] =
-      hmi_apis::FunctionID::UI_DeleteCommand;
-
-  smart_objects::SmartObject msg_params =
-      smart_objects::SmartObject(smart_objects::SmartType_Map);
-
-  const uint32_t cmd_id =
-      request.message[strings::msg_params][strings::cmd_id].asUInt();
-
-  msg_params[strings::cmd_id] = cmd_id;
-  msg_params[strings::app_id] =
-      request.message[strings::msg_params][strings::app_id];
-
-  (*ui_command)[strings::msg_params] = msg_params;
-
-  ProcessHMIRequest(ui_command, false);  // subscribe_on_response = false
-}
-
-void ResumptionDataProcessor::DeleteVRCommands(
-    const ResumptionRequest& request) {
-  LOG4CXX_AUTO_TRACE(logger_);
-  smart_objects::SmartObjectSPtr vr_command =
-      MessageHelper::CreateMessageForHMI(
-          hmi_apis::messageType::request,
-          application_manager_.GetNextHMICorrelationID());
-
-  (*vr_command)[strings::params][strings::function_id] =
-      hmi_apis::FunctionID::VR_DeleteCommand;
-
-  smart_objects::SmartObject msg_params =
-      smart_objects::SmartObject(smart_objects::SmartType_Map);
-
-  const uint32_t cmd_id =
-      request.message[strings::msg_params][strings::cmd_id].asUInt();
-
-  msg_params[strings::cmd_id] = cmd_id;
-  msg_params[strings::app_id] =
-      request.message[strings::msg_params][strings::app_id];
-  msg_params[strings::type] =
-      request.message[strings::msg_params][strings::type];
-  msg_params[strings::grammar_id] =
-      request.message[strings::msg_params][strings::grammar_id];
-
-  (*vr_command)[strings::msg_params] = msg_params;
-
-  ProcessHMIRequest(vr_command, false);  // subscribe_on_response =false
 }
 
 void ResumptionDataProcessor::AddChoicesets(
