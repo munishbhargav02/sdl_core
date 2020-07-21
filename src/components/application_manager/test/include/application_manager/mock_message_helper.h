@@ -140,11 +140,6 @@ class MockMessageHelper {
                    ApplicationConstSharedPtr application,
                    ApplicationManager& app_mngr,
                    const ButtonSubscriptions& button_subscriptions));
-  MOCK_METHOD3(CreateOnButtonSubscriptionNotificationsForApp,
-               smart_objects::SmartObjectList(
-                   ApplicationConstSharedPtr application,
-                   ApplicationManager& app_mngr,
-                   const ButtonSubscriptions& button_subscriptions));
   MOCK_METHOD4(SendPolicyUpdate,
                void(const std::string& file_path,
                     const uint32_t timeout,
