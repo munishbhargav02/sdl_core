@@ -613,6 +613,8 @@ void ResumptionDataProcessor::DeleteChoicesets(
 
   auto choices = application->choice_set_map().GetData();
   for (auto& choice : choices) {
+    MessageHelper::SendDeleteChoiceSetRequest(
+        choice.second, application, application_manager_);
     application->RemoveChoiceSet(choice.first);
   }
 }
