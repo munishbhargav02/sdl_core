@@ -578,24 +578,25 @@ void ResumptionDataProcessor::DeleteCommands(ApplicationSharedPtr application) {
 
   const uint32_t app_id = application->app_id();
   resumption_status_lock_.AcquireForReading();
-  std::vector<ResumptionRequest> requests;
+  std::vector<ResumptionRequest> failed_requests;
   if (resumption_status_.find(app_id) != resumption_status_.end()) {
-    requests = resumption_status_[app_id].error_requests;
+    failed_requests = resumption_status_[app_id].error_requests;
   }
   resumption_status_lock_.Release();
 
-  uint32_t cmd_id;
-  for (auto request : requests) {
+  uint32_t cmd_id_of_failed_VR_command;
+  for (auto request : failed_requests) {
     if (request.request_ids.function_id ==
         hmi_apis::FunctionID::VR_AddCommand) {
-      cmd_id = request.message[strings::msg_params][strings::cmd_id].asUInt();
+      cmd_id_of_failed_VR_command =
+          request.message[strings::msg_params][strings::cmd_id].asUInt();
     }
   }
 
   app_mngr::CommandsMap cmap = application->commands_map().GetData();
 
   for (auto cmd : cmap) {
-    if (cmd_id != cmd.first) {
+    if (cmd_id_of_failed_VR_command != cmd.first) {
       auto message_from_VR = MessageHelper::CreateDeleteVRCommandRequest(
           cmd.second, application, application_manager_);
       application_manager_.GetRPCService().ManageHMICommand(message_from_VR);
