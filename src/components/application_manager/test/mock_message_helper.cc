@@ -586,10 +586,19 @@ std::string MessageHelper::GetDeviceMacAddressForHandle(
       device_handle, app_mngr);
 }
 
-void MessageHelper::SendDeleteCommandRequest(smart_objects::SmartObject* cmd,
-                                             ApplicationSharedPtr application,
-                                             ApplicationManager& app_mngr) {
-  return MockMessageHelper::message_helper_mock()->SendDeleteCommandRequest(
+smart_objects::SmartObjectSPtr MessageHelper::CreateDeleteUICommandRequest(
+    smart_objects::SmartObject* cmd,
+    ApplicationSharedPtr application,
+    ApplicationManager& app_mngr) {
+  return MockMessageHelper::message_helper_mock()->CreateDeleteUICommandRequest(
+      cmd, application, app_mngr);
+}
+
+smart_objects::SmartObjectSPtr MessageHelper::CreateDeleteVRCommandRequest(
+    smart_objects::SmartObject* cmd,
+    ApplicationSharedPtr application,
+    ApplicationManager& app_mngr) {
+  return MockMessageHelper::message_helper_mock()->CreateDeleteVRCommandRequest(
       cmd, application, app_mngr);
 }
 

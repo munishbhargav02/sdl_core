@@ -603,12 +603,15 @@ MessageHelper::GetOnAppInterfaceUnregisteredNotificationToMobile(
   return notification;
 }
 
-void MessageHelper::SendDeleteCommandRequest(smart_objects::SmartObject* cmd,
-                                             ApplicationSharedPtr application,
-                                             ApplicationManager& app_mngr) {
+smart_objects::SmartObjectSPtr MessageHelper::CreateDeleteUICommandRequest(
+    smart_objects::SmartObject* cmd,
+    ApplicationSharedPtr application,
+    ApplicationManager& app_mngr) {
   LOG4CXX_AUTO_TRACE(logger_);
-  DCHECK_OR_RETURN_VOID(cmd);
+
   using namespace smart_objects;
+  DCHECK_OR_RETURN(cmd, nullptr);
+
   SmartObject msg_params = SmartObject(smart_objects::SmartType_Map);
 
   msg_params[strings::cmd_id] = (*cmd)[strings::cmd_id];
@@ -624,9 +627,24 @@ void MessageHelper::SendDeleteCommandRequest(smart_objects::SmartObject* cmd,
         hmi_apis::FunctionID::UI_DeleteCommand;
 
     object[strings::msg_params] = msg_params;
-
-    app_mngr.GetRPCService().ManageHMICommand(message);
+    return message;
   }
+  return nullptr;
+}
+
+smart_objects::SmartObjectSPtr MessageHelper::CreateDeleteVRCommandRequest(
+    smart_objects::SmartObject* cmd,
+    ApplicationSharedPtr application,
+    ApplicationManager& app_mngr) {
+  LOG4CXX_AUTO_TRACE(logger_);
+
+  using namespace smart_objects;
+  DCHECK_OR_RETURN(cmd, nullptr);
+
+  SmartObject msg_params = SmartObject(smart_objects::SmartType_Map);
+
+  msg_params[strings::cmd_id] = (*cmd)[strings::cmd_id];
+  msg_params[strings::app_id] = application->app_id();
 
   if ((*cmd).keyExists(strings::vr_commands)) {
     msg_params[strings::grammar_id] = application->get_grammar_id();
@@ -641,9 +659,9 @@ void MessageHelper::SendDeleteCommandRequest(smart_objects::SmartObject* cmd,
         hmi_apis::FunctionID::VR_DeleteCommand;
 
     object[strings::msg_params] = msg_params;
-
-    app_mngr.GetRPCService().ManageHMICommand(message);
+    return message;
   }
+  return nullptr;
 }
 
 void MessageHelper::SendDeleteSubmenuRequest(smart_objects::SmartObject* cmd,
@@ -708,8 +726,6 @@ void MessageHelper::SendDeleteChoiceSetRequest(smart_objects::SmartObject* cmd,
   LOG4CXX_AUTO_TRACE(logger_);
   DCHECK_OR_RETURN_VOID(cmd);
   using namespace smart_objects;
-
-  // Same is deleted with SendDeleteCommandRequest?
 
   SmartObject msg_params = SmartObject(smart_objects::SmartType_Map);
 

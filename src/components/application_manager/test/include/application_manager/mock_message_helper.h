@@ -140,6 +140,11 @@ class MockMessageHelper {
                    ApplicationConstSharedPtr application,
                    ApplicationManager& app_mngr,
                    const ButtonSubscriptions& button_subscriptions));
+  MOCK_METHOD3(CreateOnButtonSubscriptionNotificationsForApp,
+               smart_objects::SmartObjectList(
+                   ApplicationConstSharedPtr application,
+                   ApplicationManager& app_mngr,
+                   const ButtonSubscriptions& button_subscriptions));
   MOCK_METHOD4(SendPolicyUpdate,
                void(const std::string& file_path,
                     const uint32_t timeout,
@@ -344,10 +349,14 @@ class MockMessageHelper {
   MOCK_METHOD2(GetDeviceMacAddressForHandle,
                std::string(const transport_manager::DeviceHandle device_handle,
                            const ApplicationManager& app_mngr));
-  MOCK_METHOD3(SendDeleteCommandRequest,
-               void(smart_objects::SmartObject* cmd,
-                    ApplicationSharedPtr application,
-                    ApplicationManager& app_mngr));
+  MOCK_METHOD3(CreateDeleteUICommandRequest,
+               smart_objects::SmartObject(smart_objects::SmartObject* cmd,
+                                          ApplicationSharedPtr application,
+                                          ApplicationManager& app_mngr));
+  MOCK_METHOD3(CreateDeleteVRCommandRequest,
+               smart_objects::SmartObject(smart_objects::SmartObject* cmd,
+                                          ApplicationSharedPtr application,
+                                          ApplicationManager& app_mngr));
   MOCK_METHOD3(SendDeleteSubmenuRequest,
                void(smart_objects::SmartObject* cmd,
                     ApplicationSharedPtr application,

@@ -939,15 +939,30 @@ class MessageHelper {
       mobile_api::AppInterfaceUnregisteredReason::eType reason);
 
   /**
-   * @brief SendDeleteCommandRequest sends requests to HMI to remove UI/VR
+   * @brief CreateDeleteUICommandRequest creates request to HMI to remove UI
    * command data depending on command parameters
    * @param cmd Command data
    * @param application Application owning the command data
    * @param app_mngr Application manager
+   * @return SmartObjectSPtr message to HMI
    */
-  static void SendDeleteCommandRequest(smart_objects::SmartObject* cmd,
-                                       ApplicationSharedPtr application,
-                                       ApplicationManager& app_mngr);
+  static smart_objects::SmartObjectSPtr CreateDeleteUICommandRequest(
+      smart_objects::SmartObject* cmd,
+      ApplicationSharedPtr application,
+      ApplicationManager& app_mngr);
+
+  /**
+   * @brief CreateDeleteVRCommandRequest creates request to HMI to remove VR
+   * command data depending on command parameters
+   * @param cmd Command data
+   * @param application Application owning the command data
+   * @param app_mngr Application manager
+   * @return SmartObjectSPtr message to HMI
+   */
+  static smart_objects::SmartObjectSPtr CreateDeleteVRCommandRequest(
+      smart_objects::SmartObject* cmd,
+      ApplicationSharedPtr application,
+      ApplicationManager& app_mngr);
 
   /**
    * @brief SendDeleteSubmenuRequest sends UI/VR requests to HMI to remove
