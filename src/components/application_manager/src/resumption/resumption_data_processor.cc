@@ -574,11 +574,37 @@ void ResumptionDataProcessor::AddCommands(
 }
 
 void ResumptionDataProcessor::DeleteCommands(ApplicationSharedPtr application) {
+  LOG4CXX_AUTO_TRACE(logger_);
+
+  const uint32_t app_id = application->app_id();
+  resumption_status_lock_.AcquireForReading();
+  std::vector<ResumptionRequest> requests;
+  if (resumption_status_.find(app_id) != resumption_status_.end()) {
+    requests = resumption_status_[app_id].error_requests;
+  }
+  resumption_status_lock_.Release();
+
+  uint32_t cmd_id;
+  for (auto request : requests) {
+    if (request.request_ids.function_id ==
+        hmi_apis::FunctionID::VR_AddCommand) {
+      cmd_id = request.message[strings::msg_params][strings::cmd_id].asUInt();
+    }
+  }
+
   app_mngr::CommandsMap cmap = application->commands_map().GetData();
 
   for (auto cmd : cmap) {
-    MessageHelper::SendDeleteCommandRequest(
+    if (cmd_id != cmd.first) {
+      auto message_from_VR = MessageHelper::CreateDeleteVRCommandRequest(
+          cmd.second, application, application_manager_);
+      application_manager_.GetRPCService().ManageHMICommand(message_from_VR);
+    }
+
+    auto message_from_UI = MessageHelper::CreateDeleteUICommandRequest(
         cmd.second, application, application_manager_);
+    application_manager_.GetRPCService().ManageHMICommand(message_from_UI);
+
     application->RemoveCommand(cmd.first);
     application->help_prompt_manager().OnVrCommandDeleted(cmd.first, true);
   }
