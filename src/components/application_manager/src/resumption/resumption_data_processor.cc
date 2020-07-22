@@ -29,6 +29,7 @@
 
 #include "application_manager/application_manager.h"
 #include "application_manager/commands/command_impl.h"
+#include "application_manager/display_capabilities_builder.h"
 #include "application_manager/event_engine/event_observer.h"
 #include "application_manager/message_helper.h"
 #include "application_manager/resumption/resumption_data_processor.h"
@@ -76,6 +77,7 @@ void ResumptionDataProcessor::Restore(ApplicationSharedPtr application,
   AddChoicesets(application, saved_app);
   SetGlobalProperties(application, saved_app);
   AddSubscriptions(application, saved_app);
+  AddWindows(application, saved_app);
 
   resumption_status_lock_.AcquireForReading();
   const auto app_id = application->app_id();
@@ -90,7 +92,9 @@ void ResumptionDataProcessor::Restore(ApplicationSharedPtr application,
     sync_primitives::AutoWriteLock lock(register_callbacks_lock_);
     register_callbacks_[app_id] = callback;
   } else {
-    LOG4CXX_DEBUG(logger_, "No requests to HMI, resumption is successful");
+    LOG4CXX_DEBUG(
+        logger_,
+        "No requests to HMI for " << app_id << " , resumption is successful");
     callback(mobile_apis::Result::SUCCESS, "Data resumption successful");
   }
 }
@@ -102,7 +106,8 @@ bool ResumptionDataProcessor::HasDataToRestore(
   const bool has_data_to_restore =
       !saved_app[strings::application_submenus].empty() ||
       !saved_app[strings::application_commands].empty() ||
-      !saved_app[strings::application_choice_sets].empty();
+      !saved_app[strings::application_choice_sets].empty() ||
+      !saved_app[strings::windows_info].empty();
 
   LOG4CXX_DEBUG(logger_,
                 std::boolalpha << "Application has data to restore: "
@@ -314,6 +319,10 @@ void ResumptionDataProcessor::on_event(const event_engine::Event& event) {
     CheckVehicleDataResponse(request_ptr->message, response, status);
   }
 
+  if (hmi_apis::FunctionID::UI_CreateWindow == request_ids.function_id) {
+    CheckCreateWindowResponse(request_ptr->message, response);
+  }
+
   list_of_sent_requests.erase(request_ptr);
 
   if (!list_of_sent_requests.empty()) {
@@ -377,6 +386,7 @@ void ResumptionDataProcessor::RevertRestoredData(
   DeleteChoicesets(application);
   DeleteGlobalProperties(application);
   DeleteSubscriptions(application);
+  DeleteWindowsSubscriptions(application);
 
   resumption_status_lock_.AcquireForWriting();
   resumption_status_.erase(application->app_id());
@@ -471,6 +481,24 @@ void ResumptionDataProcessor::AddFiles(
       application->AddFile(file);
     }
   }
+}
+
+void ResumptionDataProcessor::AddWindows(
+    application_manager::ApplicationSharedPtr application,
+    const ns_smart_device_link::ns_smart_objects::SmartObject& saved_app) {
+  using namespace mobile_apis;
+  LOG4CXX_AUTO_TRACE(logger_);
+
+  if (!saved_app.keyExists(strings::windows_info)) {
+    LOG4CXX_ERROR(logger_, "windows_info section does not exist");
+    return;
+  }
+
+  const auto& windows_info = saved_app[strings::windows_info];
+  auto request_list = MessageHelper::CreateUICreateWindowRequestsToHMI(
+      application, application_manager_, windows_info);
+
+  ProcessHMIRequests(request_list);
 }
 
 void ResumptionDataProcessor::DeleteFiles(ApplicationSharedPtr application) {
@@ -896,6 +924,26 @@ void ResumptionDataProcessor::DeleteButtonsSubscriptions(
   }
 }
 
+void ResumptionDataProcessor::DeleteWindowsSubscriptions(
+    ApplicationSharedPtr application) {
+  LOG4CXX_AUTO_TRACE(logger_);
+
+  const auto window_ids = application->GetWindowIds();
+  for (const auto& window_id : window_ids) {
+    const app_mngr::HmiStatePtr hmi_state =
+        application->CurrentHmiState(window_id);
+    if (mobile_apis::WindowType::WIDGET != hmi_state->window_type()) {
+      continue;
+    }
+
+    LOG4CXX_DEBUG(logger_, "Reverting CreateWindow for: " << window_id);
+
+    auto delete_request = MessageHelper::CreateUIDeleteWindowRequestToHMI(
+        application, application_manager_, window_id);
+    ProcessHMIRequest(delete_request, false);
+  }
+}
+
 void ResumptionDataProcessor::DeletePluginsSubscriptions(
     application_manager::ApplicationSharedPtr application) {
   LOG4CXX_AUTO_TRACE(logger_);
@@ -964,6 +1012,66 @@ void ResumptionDataProcessor::CheckVehicleDataResponse(
       status.succesfull_vehicle_data_subscriptions_.push_back(ivi);
     }
   }
+}
+
+void ResumptionDataProcessor::CheckCreateWindowResponse(
+    const smart_objects::SmartObject& request,
+    const smart_objects::SmartObject& response) {
+  LOG4CXX_AUTO_TRACE(logger_);
+  const auto correlation_id =
+      response[strings::params][strings::correlation_id].asInt();
+
+  const auto& msg_params = request[strings::msg_params];
+  const auto app_id = msg_params[strings::app_id].asInt();
+
+  auto application = application_manager_.application(app_id);
+  if (!application) {
+    LOG4CXX_ERROR(logger_,
+                  "Application is not registered by hmi id: " << app_id);
+    return;
+  }
+
+  const auto window_id = msg_params[strings::window_id].asInt();
+  if (!IsRequestSuccessful(response)) {
+    LOG4CXX_ERROR(logger_,
+                  "UI_CreateWindow for correlation id: " << correlation_id
+                                                         << " has failed");
+    auto& builder = application->display_capabilities_builder();
+    builder.ResetDisplayCapabilities();
+    return;
+  }
+
+  smart_objects::SmartObject window_info(smart_objects::SmartType_Map);
+  auto fill_optional_param = [&window_info,
+                              &msg_params](const std::string& key) {
+    if (msg_params.keyExists(key)) {
+      window_info[key] = msg_params[key].asString();
+    }
+  };
+  fill_optional_param(strings::associated_service_type);
+  fill_optional_param(strings::duplicate_updates_from_window_id);
+
+  const auto window_name = msg_params[strings::window_name].asString();
+  window_info[strings::window_name] = window_name;
+  application->SetWindowInfo(window_id, window_info);
+
+  const auto window_type = static_cast<mobile_apis::WindowType::eType>(
+      msg_params[strings::window_type].asInt());
+
+  // State should be initialized with INVALID_ENUM value to let state controller
+  // trigger OnHmiStatus notifiation sending
+  auto initial_state = application_manager_.CreateRegularState(
+      application,
+      window_type,
+      mobile_apis::HMILevel::INVALID_ENUM,
+      mobile_apis::AudioStreamingState::INVALID_ENUM,
+      mobile_apis::VideoStreamingState::INVALID_ENUM,
+      mobile_apis::SystemContext::INVALID_ENUM);
+  application->SetInitialState(window_id, window_name, initial_state);
+
+  // Default HMI level for all windows except the main one is always NONE
+  application_manager_.state_controller().OnAppWindowAdded(
+      application, window_id, window_type, mobile_apis::HMILevel::HMI_NONE);
 }
 
 }  // namespace resumption
