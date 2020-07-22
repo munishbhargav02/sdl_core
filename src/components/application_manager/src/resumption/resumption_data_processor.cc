@@ -573,30 +573,63 @@ void ResumptionDataProcessor::AddCommands(
       application, application_manager_));
 }
 
+utils::Optional<uint32_t> GetUnsuccessfulRequestCommandID(
+    std::vector<ResumptionRequest>& requests) {
+  using namespace utils;
+  auto found_request = std::find_if(
+      requests.begin(), requests.end(), [](const ResumptionRequest& request) {
+        return request.request_ids.function_id ==
+               hmi_apis::FunctionID::VR_AddCommand;
+      });
+  if (requests.end() != found_request) {
+    uint32_t cmd_id =
+        found_request->message[strings::msg_params][strings::cmd_id].asUInt();
+    return Optional<uint32_t>(cmd_id);
+  }
+  return Optional<uint32_t>::OptionalEmpty::EMPTY;
+}
+
+utils::Optional<uint32_t> GetUnsuccessfulRequestCommandID(
+    std::vector<ResumptionRequest>& failed_requests,
+    std::vector<ResumptionRequest>& missed_requests) {
+  using namespace utils;
+  if (!failed_requests.empty()) {
+    Optional<uint32_t> cmd_id_of_failed_VR_command =
+        GetUnsuccessfulRequestCommandID(failed_requests);
+    if (cmd_id_of_failed_VR_command) {
+      return cmd_id_of_failed_VR_command;
+    }
+  }
+  if (!missed_requests.empty()) {
+    Optional<uint32_t> cmd_id_of_failed_VR_command =
+        GetUnsuccessfulRequestCommandID(missed_requests);
+    if (cmd_id_of_failed_VR_command) {
+      return cmd_id_of_failed_VR_command;
+    }
+  }
+  return Optional<uint32_t>::OptionalEmpty::EMPTY;
+}
+
 void ResumptionDataProcessor::DeleteCommands(ApplicationSharedPtr application) {
   LOG4CXX_AUTO_TRACE(logger_);
 
   const uint32_t app_id = application->app_id();
   resumption_status_lock_.AcquireForReading();
   std::vector<ResumptionRequest> failed_requests;
+  std::vector<ResumptionRequest> missed_requests;
   if (resumption_status_.find(app_id) != resumption_status_.end()) {
     failed_requests = resumption_status_[app_id].error_requests;
+    missed_requests = resumption_status_[app_id].list_of_sent_requests;
   }
   resumption_status_lock_.Release();
 
-  uint32_t cmd_id_of_failed_VR_command;
-  for (auto request : failed_requests) {
-    if (request.request_ids.function_id ==
-        hmi_apis::FunctionID::VR_AddCommand) {
-      cmd_id_of_failed_VR_command =
-          request.message[strings::msg_params][strings::cmd_id].asUInt();
-    }
-  }
+  utils::Optional<uint32_t> cmd_id_of_failed_VR_command =
+      GetUnsuccessfulRequestCommandID(failed_requests, missed_requests);
 
   app_mngr::CommandsMap cmap = application->commands_map().GetData();
 
   for (auto cmd : cmap) {
-    if (cmd_id_of_failed_VR_command != cmd.first) {
+    if (!cmd_id_of_failed_VR_command) {
       auto message_from_VR = MessageHelper::CreateDeleteVRCommandRequest(
           cmd.second, application, application_manager_);
       application_manager_.GetRPCService().ManageHMICommand(message_from_VR);
