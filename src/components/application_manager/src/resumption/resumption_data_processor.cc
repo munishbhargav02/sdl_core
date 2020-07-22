@@ -355,12 +355,14 @@ void ResumptionDataProcessor::on_event(const event_engine::Event& event) {
   if (successful_resumption) {
     LOG4CXX_DEBUG(logger_, "Resumption for app " << app_id << " successful");
     callback(mobile_apis::Result::SUCCESS, "Data resumption succesful");
+    application_manager_.state_controller().ResumePostponedWindows(app_id);
   }
 
   if (!successful_resumption) {
     LOG4CXX_ERROR(logger_, "Resumption for app " << app_id << " failed");
     callback(mobile_apis::Result::RESUME_FAILED, "Data resumption failed");
     RevertRestoredData(application_manager_.application(app_id));
+    application_manager_.state_controller().DropPostponedWindows(app_id);
   }
 
   resumption_status_lock_.AcquireForWriting();
