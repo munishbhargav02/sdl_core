@@ -452,7 +452,11 @@ void ResumptionDataProcessor::ProcessHMIRequests(
   }
 
   for (const auto& it : requests) {
-    ProcessHMIRequest(it, true);  // subscribe_on_response = true
+    const bool is_request =
+        application_manager::MessageType::kRequest ==
+        (*it)[strings::params][strings::message_type].asInt();
+
+    ProcessHMIRequest(it, is_request);
   }
 }
 
