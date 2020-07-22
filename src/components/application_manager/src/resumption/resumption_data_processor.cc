@@ -443,20 +443,15 @@ void ResumptionDataProcessor::ProcessHMIRequest(
   }
 }
 
-void ResumptionDataProcessor::ProcessHMIRequests(
-    const smart_objects::SmartObjectList& requests) {
+void ResumptionDataProcessor::ProcessMessagesToHMI(
+    const smart_objects::SmartObjectList& messages) {
   LOG4CXX_AUTO_TRACE(logger_);
-  if (requests.empty()) {
-    LOG4CXX_DEBUG(logger_, "requests list is empty");
-    return;
-  }
-
-  for (const auto& it : requests) {
-    const bool is_request =
+  for (const auto& message : messages) {
+    const bool is_request_message =
         application_manager::MessageType::kRequest ==
-        (*it)[strings::params][strings::message_type].asInt();
+        (*message)[strings::params][strings::message_type].asInt();
 
-    ProcessHMIRequest(it, is_request);
+    ProcessMessageToHMI(message, is_request_message);
   }
 }
 
