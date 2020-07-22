@@ -308,7 +308,7 @@ void ResumptionDataProcessor::on_event(const event_engine::Event& event) {
     return;
   }
 
-  if (IsRequestSuccessful(response)) {
+  if (IsResponseSuccessful(response)) {
     status.successful_requests.push_back(*request_ptr);
   } else {
     status.error_requests.push_back(*request_ptr);
@@ -418,27 +418,27 @@ void ResumptionDataProcessor::WaitForResponse(
   request_app_ids_lock_.Release();
 }
 
-void ResumptionDataProcessor::ProcessHMIRequest(
-    smart_objects::SmartObjectSPtr request, bool subscribe_on_response) {
+void ResumptionDataProcessor::ProcessMessageToHMI(
+    smart_objects::SmartObjectSPtr message, bool subscribe_on_response) {
   LOG4CXX_AUTO_TRACE(logger_);
   if (subscribe_on_response) {
     auto function_id = static_cast<hmi_apis::FunctionID::eType>(
-        (*request)[strings::params][strings::function_id].asInt());
+        (*message)[strings::params][strings::function_id].asInt());
 
     const int32_t hmi_correlation_id =
-        (*request)[strings::params][strings::correlation_id].asInt();
+        (*message)[strings::params][strings::correlation_id].asInt();
 
     const int32_t app_id =
-        (*request)[strings::msg_params][strings::app_id].asInt();
+        (*message)[strings::msg_params][strings::app_id].asInt();
 
     ResumptionRequest wait_for_response;
     wait_for_response.request_ids.correlation_id = hmi_correlation_id;
     wait_for_response.request_ids.function_id = function_id;
-    wait_for_response.message = *request;
+    wait_for_response.message = *message;
 
     WaitForResponse(app_id, wait_for_response);
   }
-  if (!application_manager_.GetRPCService().ManageHMICommand(request)) {
+  if (!application_manager_.GetRPCService().ManageHMICommand(message)) {
     LOG4CXX_ERROR(logger_, "Unable to send request");
   }
 }
@@ -487,7 +487,6 @@ void ResumptionDataProcessor::AddFiles(
 void ResumptionDataProcessor::AddWindows(
     application_manager::ApplicationSharedPtr application,
     const ns_smart_device_link::ns_smart_objects::SmartObject& saved_app) {
-  using namespace mobile_apis;
   LOG4CXX_AUTO_TRACE(logger_);
 
   if (!saved_app.keyExists(strings::windows_info)) {
@@ -499,7 +498,7 @@ void ResumptionDataProcessor::AddWindows(
   auto request_list = MessageHelper::CreateUICreateWindowRequestsToHMI(
       application, application_manager_, windows_info);
 
-  ProcessHMIRequests(request_list);
+  ProcessMessagesToHMI(request_list);
 }
 
 void ResumptionDataProcessor::DeleteFiles(ApplicationSharedPtr application) {
@@ -527,7 +526,7 @@ void ResumptionDataProcessor::AddSubmenues(
     application->AddSubMenu(submenu[strings::menu_id].asUInt(), submenu);
   }
 
-  ProcessHMIRequests(MessageHelper::CreateAddSubMenuRequestsToHMI(
+  ProcessMessagesToHMI(MessageHelper::CreateAddSubMenuRequestsToHMI(
       application, application_manager_));
 }
 
@@ -569,7 +568,7 @@ void ResumptionDataProcessor::DeleteSubmenues(
       (*ui_sub_menu)[strings::msg_params] = msg_params;
 
       application->RemoveSubMenu(msg_params[strings::menu_id].asInt());
-      ProcessHMIRequest(ui_sub_menu, false);  // subscribe_on_response = false
+      ProcessMessageToHMI(ui_sub_menu, false);  // subscribe_on_response = false
     }
   }
 }
@@ -598,7 +597,7 @@ void ResumptionDataProcessor::AddCommands(
         cmd_id, command, true);  // is_resumption =true
   }
 
-  ProcessHMIRequests(MessageHelper::CreateAddCommandRequestToHMI(
+  ProcessMessagesToHMI(MessageHelper::CreateAddCommandRequestToHMI(
       application, application_manager_));
 }
 
@@ -711,7 +710,7 @@ void ResumptionDataProcessor::AddChoicesets(
     application->AddChoiceSet(choice_set_id, choice_set);
   }
 
-  ProcessHMIRequests(MessageHelper::CreateAddVRCommandRequestFromChoiceToHMI(
+  ProcessMessagesToHMI(MessageHelper::CreateAddVRCommandRequestFromChoiceToHMI(
       application, application_manager_));
 }
 utils::Optional<ResumptionRequest> FindResumptionChoiceSetRequest(
@@ -770,7 +769,7 @@ void ResumptionDataProcessor::SetGlobalProperties(
       saved_app[strings::application_global_properties];
   application->load_global_properties(properties_so);
 
-  ProcessHMIRequests(MessageHelper::CreateGlobalPropertiesRequestsToHMI(
+  ProcessMessagesToHMI(MessageHelper::CreateGlobalPropertiesRequestsToHMI(
       application, application_manager_));
 }
 
@@ -812,7 +811,7 @@ void ResumptionDataProcessor::DeleteGlobalProperties(
     (*msg)[strings::params][strings::function_id] =
         hmi_apis::FunctionID::UI_SetGlobalProperties;
     (*msg)[strings::msg_params] = *msg_params;
-    ProcessHMIRequest(msg, false);
+    ProcessMessageToHMI(msg, false);
   }
 
   if (result.HasTTSPropertiesReset() &&
@@ -827,7 +826,7 @@ void ResumptionDataProcessor::DeleteGlobalProperties(
         hmi_apis::FunctionID::TTS_SetGlobalProperties;
 
     (*msg)[strings::msg_params] = *msg_params;
-    ProcessHMIRequest(msg, false);
+    ProcessMessageToHMI(msg, false);
   }
 }
 
@@ -866,7 +865,7 @@ void ResumptionDataProcessor::AddButtonsSubscriptions(
     ButtonSubscriptions button_subscriptions =
         GetButtonSubscriptionsToResume(application);
 
-    ProcessHMIRequests(
+    ProcessMessagesToHMI(
         MessageHelper::CreateOnButtonSubscriptionNotificationsForApp(
             application, application_manager_, button_subscriptions));
   }
@@ -920,7 +919,7 @@ void ResumptionDataProcessor::DeleteButtonsSubscriptions(
     notification = MessageHelper::CreateOnButtonSubscriptionNotification(
         application->hmi_app_id(), hmi_btn, false);
     // is_subscribed = false
-    ProcessHMIRequest(notification, false);
+    ProcessMessageToHMI(notification, false);
     application->UnsubscribeFromButton(btn);
   }
 }
@@ -931,8 +930,7 @@ void ResumptionDataProcessor::DeleteWindowsSubscriptions(
 
   const auto window_ids = application->GetWindowIds();
   for (const auto& window_id : window_ids) {
-    const app_mngr::HmiStatePtr hmi_state =
-        application->CurrentHmiState(window_id);
+    const auto hmi_state = application->CurrentHmiState(window_id);
     if (mobile_apis::WindowType::WIDGET != hmi_state->window_type()) {
       continue;
     }
@@ -941,7 +939,8 @@ void ResumptionDataProcessor::DeleteWindowsSubscriptions(
 
     auto delete_request = MessageHelper::CreateUIDeleteWindowRequestToHMI(
         application, application_manager_, window_id);
-    ProcessHMIRequest(delete_request, false);
+    const bool subscribe_on_request_events = false;
+    ProcessMessageToHMI(delete_request, subscribe_on_request_events);
   }
 }
 
@@ -969,7 +968,7 @@ void ResumptionDataProcessor::DeletePluginsSubscriptions(
   }
 }
 
-bool ResumptionDataProcessor::IsRequestSuccessful(
+bool ResumptionDataProcessor::IsResponseSuccessful(
     const smart_objects::SmartObject& response) const {
   const hmi_apis::Common_Result::eType result_code =
       static_cast<hmi_apis::Common_Result::eType>(
@@ -986,7 +985,7 @@ void ResumptionDataProcessor::CheckVehicleDataResponse(
   LOG4CXX_AUTO_TRACE(logger_);
   const auto request_keys = request[strings::msg_params].enumerate();
 
-  if (!IsRequestSuccessful(response)) {
+  if (!IsResponseSuccessful(response)) {
     LOG4CXX_TRACE(logger_, "Vehicle data request not succesfull");
     for (const auto key : request_keys) {
       status.unsuccesfull_vehicle_data_subscriptions_.push_back(key);
@@ -1017,7 +1016,7 @@ void ResumptionDataProcessor::CheckVehicleDataResponse(
 
 void ResumptionDataProcessor::CheckCreateWindowResponse(
     const smart_objects::SmartObject& request,
-    const smart_objects::SmartObject& response) {
+    const smart_objects::SmartObject& response) const {
   LOG4CXX_AUTO_TRACE(logger_);
   const auto correlation_id =
       response[strings::params][strings::correlation_id].asInt();
@@ -1033,7 +1032,7 @@ void ResumptionDataProcessor::CheckCreateWindowResponse(
   }
 
   const auto window_id = msg_params[strings::window_id].asInt();
-  if (!IsRequestSuccessful(response)) {
+  if (!IsResponseSuccessful(response)) {
     LOG4CXX_ERROR(logger_,
                   "UI_CreateWindow for correlation id: " << correlation_id
                                                          << " has failed");
