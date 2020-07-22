@@ -161,17 +161,15 @@ void DisplayCapabilitiesBuilder::ResetDisplayCapabilities() {
   }
 
   if (display_capabilities_) {
-    auto cur_window_caps =
+    auto* cur_window_caps_ptr =
         (*display_capabilities_)[0][strings::window_capabilities].asArray();
-    if (cur_window_caps) {
-      std::remove_if(cur_window_caps->begin(),
-                     cur_window_caps->end(),
+    if (cur_window_caps_ptr) {
+      std::remove_if(cur_window_caps_ptr->begin(),
+                     cur_window_caps_ptr->end(),
                      [](const smart_objects::SmartObject& item) {
-                       const WindowID window_id =
-                           item.keyExists(strings::window_id)
-                               ? item[strings::window_id].asInt()
-                               : kDefaultWindowID;
-                       return kDefaultWindowID != window_id;
+                       return item.keyExists(strings::window_id) &&
+                              item[strings::window_id].asInt() !=
+                                  kDefaultWindowID;
                      });
     }
   }
