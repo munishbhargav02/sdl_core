@@ -189,67 +189,21 @@ bool ResumptionRequestIDs::operator<(const ResumptionRequestIDs& other) const {
          function_id < other.function_id;
 }
 
-void ResumptionDataProcessor::HandleOnTimeOut(
-    const uint32_t corr_id, const hmi_apis::FunctionID::eType function_id) {
-  LOG4CXX_AUTO_TRACE(logger_);
-  LOG4CXX_DEBUG(logger_,
-                "Handling timeout with corr id: "
-                    << corr_id << " and function_id: " << function_id);
-  uint32_t app_id = 0;
-  ApplicationSharedPtr app;
-
-  request_app_ids_lock_.AcquireForReading();
-  auto it = std::find_if(
-      request_app_ids_.begin(),
-      request_app_ids_.end(),
-      [corr_id, function_id](
-          const std::pair<ResumptionRequestIDs, std::uint32_t>& item) {
-        return item.first.function_id == function_id &&
-               item.first.correlation_id == static_cast<int32_t>(corr_id);
-      });
-
-  if (it != request_app_ids_.end()) {
-    app_id = it->second;
-    app = application_manager_.application(app_id);
-  }
-  request_app_ids_lock_.Release();
-
-  if (app && app->is_resuming()) {
-    LOG4CXX_DEBUG(logger_, "Unsubscribing from event: " << function_id);
-    unsubscribe_from_event(function_id);
-
-    register_callbacks_lock_.AcquireForReading();
-    auto it = register_callbacks_.find(app_id);
-    if (it == register_callbacks_.end()) {
-      LOG4CXX_WARN(logger_, "Callback for app_id: " << app_id << " not found");
-
-      register_callbacks_lock_.Release();
-      return;
-    }
-
-    auto callback = it->second;
-    register_callbacks_lock_.Release();
-
-    callback(mobile_apis::Result::RESUME_FAILED, "Data resumption failed");
-
-    RevertRestoredData(application_manager_.application(app_id));
-  }
-}
-
-void ResumptionDataProcessor::on_event(const event_engine::Event& event) {
-  LOG4CXX_AUTO_TRACE(logger_);
-  const smart_objects::SmartObject& response = event.smart_object();
-
+void ResumptionDataProcessor::ProcessResponseFromHMI(
+    const smart_objects::SmartObject& response,
+    const hmi_apis::FunctionID::eType function_id,
+    const int32_t corr_id) {
   ResumptionRequestIDs request_ids;
-  request_ids.function_id = event.id();
-  request_ids.correlation_id = event.smart_object_correlation_id();
+  request_ids.function_id = function_id;
+  request_ids.correlation_id = corr_id;
   // TODO i suppose it can be optimised with moving app id into
   // ResumptionRequest struct, so that we don't have to perform
   // basically the same search twice
   auto predicate =
-      [&event](const std::pair<ResumptionRequestIDs, std::uint32_t>& item) {
-        return item.first.function_id == event.id() &&
-               item.first.correlation_id == event.smart_object_correlation_id();
+      [function_id,
+       corr_id](const std::pair<ResumptionRequestIDs, std::uint32_t>& item) {
+        return item.first.function_id == function_id &&
+               item.first.correlation_id == corr_id;
       };
 
   request_app_ids_lock_.AcquireForReading();
@@ -259,8 +213,7 @@ void ResumptionDataProcessor::on_event(const event_engine::Event& event) {
   if (app_id_ptr == request_app_ids_.end()) {
     LOG4CXX_ERROR(logger_,
                   "application id for correlation id "
-                      << event.smart_object_correlation_id()
-                      << " and function id: " << event.id()
+                      << corr_id << " and function id: " << function_id
                       << " was not found.");
     request_app_ids_lock_.Release();
     return;
@@ -296,10 +249,9 @@ void ResumptionDataProcessor::on_event(const event_engine::Event& event) {
   auto request_ptr =
       std::find_if(list_of_sent_requests.begin(),
                    list_of_sent_requests.end(),
-                   [&event](const ResumptionRequest& request) {
-                     return request.request_ids.correlation_id ==
-                                event.smart_object_correlation_id() &&
-                            request.request_ids.function_id == event.id();
+                   [function_id, corr_id](const ResumptionRequest& request) {
+                     return request.request_ids.correlation_id == corr_id &&
+                            request.request_ids.function_id == function_id;
                    });
 
   if (list_of_sent_requests.end() == request_ptr) {
@@ -376,6 +328,30 @@ void ResumptionDataProcessor::on_event(const event_engine::Event& event) {
   register_callbacks_lock_.AcquireForWriting();
   register_callbacks_.erase(app_id);
   register_callbacks_lock_.Release();
+}
+
+void ResumptionDataProcessor::HandleOnTimeOut(
+    const uint32_t corr_id, const hmi_apis::FunctionID::eType function_id) {
+  LOG4CXX_AUTO_TRACE(logger_);
+  LOG4CXX_DEBUG(logger_,
+                "Handling timeout with corr id: "
+                    << corr_id << " and function_id: " << function_id);
+
+  auto error_response = MessageHelper::CreateNegativeResponseFromHmi(
+      function_id,
+      corr_id,
+      hmi_apis::Common_Result::GENERIC_ERROR,
+      std::string());
+  if (error_response) {
+    ProcessResponseFromHMI(*error_response, function_id, corr_id);
+  }
+}
+
+void ResumptionDataProcessor::on_event(const event_engine::Event& event) {
+  LOG4CXX_AUTO_TRACE(logger_);
+  LOG4CXX_DEBUG(logger_, "Handling response message from HMI");
+  ProcessResponseFromHMI(
+      event.smart_object(), event.id(), event.smart_object_correlation_id());
 }
 
 void ResumptionDataProcessor::RevertRestoredData(
