@@ -917,6 +917,11 @@ void ResumptionDataProcessor::DeleteWindowsSubscriptions(
         application, application_manager_, window_id);
     const bool subscribe_on_request_events = false;
     ProcessMessageToHMI(delete_request, subscribe_on_request_events);
+
+    application->RemoveWindowInfo(window_id);
+    application->RemoveHMIState(window_id,
+                                app_mngr::HmiState::StateID::STATE_ID_REGULAR);
+    application->remove_window_capability(window_id);
   }
 }
 
