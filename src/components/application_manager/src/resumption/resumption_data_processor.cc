@@ -573,41 +573,28 @@ void ResumptionDataProcessor::AddCommands(
       application, application_manager_));
 }
 
-utils::Optional<uint32_t> GetUnsuccessfulRequestCommandID(
-    std::vector<ResumptionRequest>& requests) {
+utils::Optional<ResumptionRequest> FindCommandRequest(
+    uint32_t command_id, std::vector<ResumptionRequest>& requests) {
   using namespace utils;
-  auto found_request = std::find_if(
-      requests.begin(), requests.end(), [](const ResumptionRequest& request) {
-        return request.request_ids.function_id ==
-               hmi_apis::FunctionID::VR_AddCommand;
+  auto request_it = std::find_if(
+      requests.begin(),
+      requests.end(),
+      [command_id](const ResumptionRequest& request) {
+        if (request.message[strings::msg_params].keyExists(strings::cmd_id) &&
+            (request.message[strings::msg_params].keyExists(
+                 strings::menu_params) ||
+             (request.message[strings::msg_params][strings::type] ==
+              hmi_apis::Common_VRCommandType::Command))) {
+          uint32_t cmd_id =
+              request.message[strings::msg_params][strings::cmd_id].asUInt();
+          return cmd_id == command_id;
+        }
+        return false;
       });
-  if (requests.end() != found_request) {
-    uint32_t cmd_id =
-        found_request->message[strings::msg_params][strings::cmd_id].asUInt();
-    return Optional<uint32_t>(cmd_id);
+  if (requests.end() != request_it) {
+    return Optional<ResumptionRequest>(*request_it);
   }
-  return Optional<uint32_t>::OptionalEmpty::EMPTY;
-}
-
-utils::Optional<uint32_t> GetUnsuccessfulRequestCommandID(
-    std::vector<ResumptionRequest>& failed_requests,
-    std::vector<ResumptionRequest>& missed_requests) {
-  using namespace utils;
-  if (!failed_requests.empty()) {
-    Optional<uint32_t> cmd_id_of_failed_VR_command =
-        GetUnsuccessfulRequestCommandID(failed_requests);
-    if (cmd_id_of_failed_VR_command) {
-      return cmd_id_of_failed_VR_command;
-    }
-  }
-  if (!missed_requests.empty()) {
-    Optional<uint32_t> cmd_id_of_failed_VR_command =
-        GetUnsuccessfulRequestCommandID(missed_requests);
-    if (cmd_id_of_failed_VR_command) {
-      return cmd_id_of_failed_VR_command;
-    }
-  }
-  return Optional<uint32_t>::OptionalEmpty::EMPTY;
+  return Optional<ResumptionRequest>::OptionalEmpty::EMPTY;
 }
 
 void ResumptionDataProcessor::DeleteCommands(ApplicationSharedPtr application) {
@@ -623,21 +610,38 @@ void ResumptionDataProcessor::DeleteCommands(ApplicationSharedPtr application) {
   }
   resumption_status_lock_.Release();
 
-  utils::Optional<uint32_t> cmd_id_of_failed_VR_command =
-      GetUnsuccessfulRequestCommandID(failed_requests, missed_requests);
+  failed_requests.insert(
+      failed_requests.end(), missed_requests.begin(), missed_requests.end());
 
   app_mngr::CommandsMap cmap = application->commands_map().GetData();
 
   for (auto cmd : cmap) {
-    if (!cmd_id_of_failed_VR_command) {
-      auto message_from_VR = MessageHelper::CreateDeleteVRCommandRequest(
-          cmd.second, application, application_manager_);
-      application_manager_.GetRPCService().ManageHMICommand(message_from_VR);
+    auto failed_command = FindCommandRequest(cmd.first, failed_requests);
+    bool VR_failed = false;
+    bool UI_failed = false;
+    if (failed_command) {
+      (*failed_command)
+              .message[strings::msg_params]
+              .keyExists(strings::vr_commands)
+          ? VR_failed = true
+          : UI_failed = true;
     }
-
-    auto message_from_UI = MessageHelper::CreateDeleteUICommandRequest(
-        cmd.second, application, application_manager_);
-    application_manager_.GetRPCService().ManageHMICommand(message_from_UI);
+    if (!VR_failed) {
+      auto delete_VR_command_msg = MessageHelper::CreateDeleteVRCommandRequest(
+          cmd.second,
+          application,
+          application_manager_.GetNextHMICorrelationID());
+      application_manager_.GetRPCService().ManageHMICommand(
+          delete_VR_command_msg);
+    }
+    if (!UI_failed) {
+      auto delete_UI_command_msg = MessageHelper::CreateDeleteUICommandRequest(
+          cmd.second,
+          application->app_id(),
+          application_manager_.GetNextHMICorrelationID());
+      application_manager_.GetRPCService().ManageHMICommand(
+          delete_UI_command_msg);
+    }
 
     application->RemoveCommand(cmd.first);
     application->help_prompt_manager().OnVrCommandDeleted(cmd.first, true);
