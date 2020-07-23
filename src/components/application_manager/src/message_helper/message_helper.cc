@@ -604,9 +604,7 @@ MessageHelper::GetOnAppInterfaceUnregisteredNotificationToMobile(
 }
 
 smart_objects::SmartObjectSPtr MessageHelper::CreateDeleteUICommandRequest(
-    smart_objects::SmartObject* cmd,
-    ApplicationSharedPtr application,
-    ApplicationManager& app_mngr) {
+    smart_objects::SmartObject* cmd, uint32_t app_id, uint32_t corr_id) {
   LOG4CXX_AUTO_TRACE(logger_);
 
   using namespace smart_objects;
@@ -615,11 +613,11 @@ smart_objects::SmartObjectSPtr MessageHelper::CreateDeleteUICommandRequest(
   SmartObject msg_params = SmartObject(smart_objects::SmartType_Map);
 
   msg_params[strings::cmd_id] = (*cmd)[strings::cmd_id];
-  msg_params[strings::app_id] = application->app_id();
+  msg_params[strings::app_id] = app_id;
 
   if ((*cmd).keyExists(strings::menu_params)) {
-    SmartObjectSPtr message = CreateMessageForHMI(
-        hmi_apis::messageType::request, app_mngr.GetNextHMICorrelationID());
+    SmartObjectSPtr message =
+        CreateMessageForHMI(hmi_apis::messageType::request, corr_id);
     DCHECK(message);
 
     SmartObject& object = *message;
@@ -635,7 +633,7 @@ smart_objects::SmartObjectSPtr MessageHelper::CreateDeleteUICommandRequest(
 smart_objects::SmartObjectSPtr MessageHelper::CreateDeleteVRCommandRequest(
     smart_objects::SmartObject* cmd,
     ApplicationSharedPtr application,
-    ApplicationManager& app_mngr) {
+    uint32_t corr_id) {
   LOG4CXX_AUTO_TRACE(logger_);
 
   using namespace smart_objects;
@@ -650,8 +648,8 @@ smart_objects::SmartObjectSPtr MessageHelper::CreateDeleteVRCommandRequest(
     msg_params[strings::grammar_id] = application->get_grammar_id();
     msg_params[strings::type] = hmi_apis::Common_VRCommandType::Command;
 
-    SmartObjectSPtr message = CreateMessageForHMI(
-        hmi_apis::messageType::request, app_mngr.GetNextHMICorrelationID());
+    SmartObjectSPtr message =
+        CreateMessageForHMI(hmi_apis::messageType::request, corr_id);
     DCHECK(message);
 
     SmartObject& object = *message;

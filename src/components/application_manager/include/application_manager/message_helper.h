@@ -942,27 +942,25 @@ class MessageHelper {
    * @brief CreateDeleteUICommandRequest creates request to HMI to remove UI
    * command data depending on command parameters
    * @param cmd Command data
-   * @param application Application owning the command data
-   * @param app_mngr Application manager
+   * @param app_id ID of application owning the command data
+   * @param corr_id Correlation ID
    * @return SmartObjectSPtr message to HMI
    */
   static smart_objects::SmartObjectSPtr CreateDeleteUICommandRequest(
-      smart_objects::SmartObject* cmd,
-      ApplicationSharedPtr application,
-      ApplicationManager& app_mngr);
+      smart_objects::SmartObject* cmd, uint32_t app_id, uint32_t corr_id);
 
   /**
    * @brief CreateDeleteVRCommandRequest creates request to HMI to remove VR
    * command data depending on command parameters
    * @param cmd Command data
    * @param application Application owning the command data
-   * @param app_mngr Application manager
+   * @param corr_id Correlation ID
    * @return SmartObjectSPtr message to HMI
    */
   static smart_objects::SmartObjectSPtr CreateDeleteVRCommandRequest(
       smart_objects::SmartObject* cmd,
       ApplicationSharedPtr application,
-      ApplicationManager& app_mngr);
+      uint32_t corr_id);
 
   /**
    * @brief SendDeleteSubmenuRequest sends UI/VR requests to HMI to remove
