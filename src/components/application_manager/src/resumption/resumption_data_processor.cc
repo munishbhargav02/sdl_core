@@ -609,13 +609,14 @@ std::vector<ResumptionRequest> GetAllFailedRequests(
     uint32_t app_id,
     const std::map<std::int32_t, ApplicationResumptionStatus>&
         resumption_status,
-    sync_primitives::RWLock resumption_status_lock) {
+    sync_primitives::RWLock& resumption_status_lock) {
   resumption_status_lock.AcquireForReading();
   std::vector<ResumptionRequest> failed_requests;
   std::vector<ResumptionRequest> missed_requests;
-  if (resumption_status.find(app_id) != resumption_status.end()) {
-    failed_requests = resumption_status[app_id].error_requests;
-    missed_requests = resumption_status[app_id].list_of_sent_requests;
+  auto it = resumption_status.find(app_id);
+  if (it != resumption_status.end()) {
+    failed_requests = it->second.error_requests;
+    missed_requests = it->second.list_of_sent_requests;
   }
   resumption_status_lock.Release();
 
