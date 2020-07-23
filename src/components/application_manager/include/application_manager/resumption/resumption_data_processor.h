@@ -102,6 +102,8 @@ class ResumptionDataProcessor : public app_mngr::event_engine::EventObserver {
                        const hmi_apis::FunctionID::eType);
 
  private:
+  std::vector<ResumptionRequest> GetAllFailedRequests(uint32_t app_id);
+
   /**
    * @brief Revert the data to the state before Resumption
    * @param shared ptr to application
