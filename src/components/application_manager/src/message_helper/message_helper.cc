@@ -604,7 +604,9 @@ MessageHelper::GetOnAppInterfaceUnregisteredNotificationToMobile(
 }
 
 smart_objects::SmartObjectSPtr MessageHelper::CreateDeleteUICommandRequest(
-    smart_objects::SmartObject* cmd, uint32_t app_id, uint32_t corr_id) {
+    smart_objects::SmartObject* cmd,
+    const uint32_t app_id,
+    const uint32_t corr_id) {
   LOG4CXX_AUTO_TRACE(logger_);
 
   using namespace smart_objects;
@@ -633,7 +635,7 @@ smart_objects::SmartObjectSPtr MessageHelper::CreateDeleteUICommandRequest(
 smart_objects::SmartObjectSPtr MessageHelper::CreateDeleteVRCommandRequest(
     smart_objects::SmartObject* cmd,
     ApplicationSharedPtr application,
-    uint32_t corr_id) {
+    const uint32_t corr_id) {
   LOG4CXX_AUTO_TRACE(logger_);
 
   using namespace smart_objects;
