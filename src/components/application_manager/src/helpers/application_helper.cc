@@ -19,13 +19,13 @@ void DeleteCommands(ApplicationSharedPtr app, ApplicationManager& app_manager) {
   CommandsMap cmap = app->commands_map().GetData();
 
   for (auto cmd : cmap) {
-    auto message_from_UI = MessageHelper::CreateDeleteUICommandRequest(
+    auto delete_UI_msg = MessageHelper::CreateDeleteUICommandRequest(
         cmd.second, app->app_id(), app_manager.GetNextHMICorrelationID());
-    app_manager.GetRPCService().ManageHMICommand(message_from_UI);
+    app_manager.GetRPCService().ManageHMICommand(delete_UI_msg);
 
-    auto message_from_VR = MessageHelper::CreateDeleteVRCommandRequest(
+    auto delete_VR_msg = MessageHelper::CreateDeleteVRCommandRequest(
         cmd.second, app, app_manager.GetNextHMICorrelationID());
-    app_manager.GetRPCService().ManageHMICommand(message_from_VR);
+    app_manager.GetRPCService().ManageHMICommand(delete_VR_msg);
 
     app->RemoveCommand(cmd.first);
     app->help_prompt_manager().OnVrCommandDeleted(cmd.first, true);
