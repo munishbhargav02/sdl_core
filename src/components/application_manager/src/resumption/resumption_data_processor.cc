@@ -582,26 +582,25 @@ utils::Optional<ResumptionRequest> FindCommandResumptionRequest(
       requests.end(),
       [command_id](const ResumptionRequest& request) {
         auto& msg_params = request.message[strings::msg_params];
+        const bool is_vr_command = hmi_apis::FunctionID::VR_AddCommand ==
+                                       request.request_ids.function_id &&
+                                   hmi_apis::Common_VRCommandType::Command ==
+                                       msg_params[strings::type].asInt();
+        const bool is_ui_command = hmi_apis::FunctionID::UI_AddCommand ==
+                                   request.request_ids.function_id;
 
-        auto is_vr_command = [](const smart_objects::SmartObject& msg_params) {
-          return msg_params[strings::type] ==
-                 hmi_apis::Common_VRCommandType::Command;
-        };
-        auto is_ui_command = [](const smart_objects::SmartObject& msg_params) {
-          return msg_params.keyExists(strings::cmd_id) &&
-                 (msg_params.keyExists(strings::menu_params));
-        };
-
-        if (is_vr_command(msg_params) || is_ui_command(msg_params)) {
-          DCHECK(msg_params.keyExists(strings::cmd_id));
+        if (is_vr_command || is_ui_command) {
           uint32_t cmd_id = msg_params[strings::cmd_id].asUInt();
           return cmd_id == command_id;
         }
+
         return false;
       });
+
   if (requests.end() != request_it) {
     return Optional<ResumptionRequest>(*request_it);
   }
+
   return Optional<ResumptionRequest>::OptionalEmpty::EMPTY;
 }
 
