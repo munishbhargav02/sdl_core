@@ -573,40 +573,51 @@ void ResumptionDataProcessor::AddCommands(
       application, application_manager_));
 }
 
-utils::Optional<ResumptionRequest> FindCommandRequest(
+utils::Optional<ResumptionRequest> FindCommandResumptionRequest(
     uint32_t command_id, std::vector<ResumptionRequest>& requests) {
   using namespace utils;
 
-  auto request_it =
-      std::find_if(requests.begin(),
-                   requests.end(),
-                   [command_id](const ResumptionRequest& request) {
-                     auto& msg_params = request.message[strings::msg_params];
-                     if (msg_params.keyExists(strings::cmd_id) &&
-                         (msg_params.keyExists(strings::menu_params) ||
-                          (msg_params[strings::type] ==
-                           hmi_apis::Common_VRCommandType::Command))) {
-                       uint32_t cmd_id = msg_params[strings::cmd_id].asUInt();
-                       return cmd_id == command_id;
-                     }
-                     return false;
-                   });
+  auto request_it = std::find_if(
+      requests.begin(),
+      requests.end(),
+      [command_id](const ResumptionRequest& request) {
+        auto& msg_params = request.message[strings::msg_params];
+
+        auto is_vr_command = [](const smart_objects::SmartObject& msg_params) {
+          return msg_params[strings::type] ==
+                 hmi_apis::Common_VRCommandType::Command;
+        };
+        auto is_ui_command = [](const smart_objects::SmartObject& msg_params) {
+          return msg_params.keyExists(strings::cmd_id) &&
+                 (msg_params.keyExists(strings::menu_params));
+        };
+
+        if (is_vr_command(msg_params) || is_ui_command(msg_params)) {
+          DCHECK(msg_params.keyExists(strings::cmd_id));
+          uint32_t cmd_id = msg_params[strings::cmd_id].asUInt();
+          return cmd_id == command_id;
+        }
+        return false;
+      });
   if (requests.end() != request_it) {
     return Optional<ResumptionRequest>(*request_it);
   }
   return Optional<ResumptionRequest>::OptionalEmpty::EMPTY;
 }
 
-std::vector<ResumptionRequest> ResumptionDataProcessor::GetAllFailedRequests(
-    uint32_t app_id) {
-  resumption_status_lock_.AcquireForReading();
+std::vector<ResumptionRequest> GetAllFailedRequests(
+    uint32_t app_id,
+    const std::map<std::int32_t, ApplicationResumptionStatus>&
+        resumption_status,
+    sync_primitives::RWLock resumption_status_lock) {
+  resumption_status_lock.AcquireForReading();
   std::vector<ResumptionRequest> failed_requests;
   std::vector<ResumptionRequest> missed_requests;
-  if (resumption_status_.find(app_id) != resumption_status_.end()) {
-    failed_requests = resumption_status_[app_id].error_requests;
-    missed_requests = resumption_status_[app_id].list_of_sent_requests;
+  if (resumption_status.find(app_id) != resumption_status.end()) {
+    failed_requests = resumption_status[app_id].error_requests;
+    missed_requests = resumption_status[app_id].list_of_sent_requests;
   }
-  resumption_status_lock_.Release();
+  resumption_status_lock.Release();
 
   failed_requests.insert(
       failed_requests.end(), missed_requests.begin(), missed_requests.end());
@@ -616,16 +627,19 @@ std::vector<ResumptionRequest> ResumptionDataProcessor::GetAllFailedRequests(
 void ResumptionDataProcessor::DeleteCommands(ApplicationSharedPtr application) {
   LOG4CXX_AUTO_TRACE(logger_);
 
-  auto failed_requests = GetAllFailedRequests(application->app_id());
+  auto failed_requests = GetAllFailedRequests(
+      application->app_id(), resumption_status_, resumption_status_lock_);
 
   app_mngr::CommandsMap cmap = application->commands_map().GetData();
 
+  auto is_vr_command_failed = [](const ResumptionRequest& failed_command) {
+    return failed_command.message[strings::msg_params].keyExists(
+        strings::vr_commands);
+  };
+
   for (auto cmd : cmap) {
-    auto failed_command = FindCommandRequest(cmd.first, failed_requests);
-    auto is_vr_command_failed = [](const ResumptionRequest& failed_command) {
-      return failed_command.message[strings::msg_params].keyExists(
-          strings::vr_commands);
-    };
+    auto failed_command =
+        FindCommandResumptionRequest(cmd.first, failed_requests);
 
     if (!failed_command || (!is_vr_command_failed(*failed_command))) {
       auto delete_VR_command_msg = MessageHelper::CreateDeleteVRCommandRequest(
@@ -671,7 +685,7 @@ void ResumptionDataProcessor::AddChoicesets(
   ProcessHMIRequests(MessageHelper::CreateAddVRCommandRequestFromChoiceToHMI(
       application, application_manager_));
 }
-utils::Optional<ResumptionRequest> FindChoiceSetRequest(
+utils::Optional<ResumptionRequest> FindResumptionChoiceSetRequest(
     uint32_t command_id, std::vector<ResumptionRequest>& requests) {
   using namespace utils;
 
@@ -698,12 +712,13 @@ void ResumptionDataProcessor::DeleteChoicesets(
     ApplicationSharedPtr application) {
   LOG4CXX_AUTO_TRACE(logger_);
 
-  auto failed_requests = GetAllFailedRequests(application->app_id());
+  auto failed_requests = GetAllFailedRequests(
+      application->app_id(), resumption_status_, resumption_status_lock_);
 
   auto choices = application->choice_set_map().GetData();
   for (auto& choice : choices) {
     auto failed_choice_set =
-        FindChoiceSetRequest(choice.first, failed_requests);
+        FindResumptionChoiceSetRequest(choice.first, failed_requests);
     if (!failed_choice_set) {
       MessageHelper::SendDeleteChoiceSetRequest(
           choice.second, application, application_manager_);
