@@ -937,10 +937,7 @@ bool FindWayPointsResumptionRequest(std::vector<ResumptionRequest>& requests) {
         return false;
       });
 
-  if (requests.end() != request_it) {
-    return true;
-  }
-  return false;
+  return requests.end() != request_it;
 }
 
 void ResumptionDataProcessor::DeletePluginsSubscriptions(
@@ -964,7 +961,7 @@ void ResumptionDataProcessor::DeletePluginsSubscriptions(
 
   auto failed_requests = GetAllFailedRequests(
       application->app_id(), resumption_status_, resumption_status_lock_);
-  bool is_way_points_request_failed =
+  const bool is_way_points_request_failed =
       FindWayPointsResumptionRequest(failed_requests);
   if (is_way_points_request_failed) {
     extension_subscriptions[strings::subscribed_for_way_points] = false;
