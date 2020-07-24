@@ -132,29 +132,21 @@ void SDLRPCPlugin::SaveResumptionData(
       application_manager_->IsAppSubscribedForWayPoints(app);
 }
 
-void SDLRPCPlugin::RevertResumption(application_manager::Application& app) {
-  application_manager::ApplicationSharedPtr application =
-      application_manager_->application(app.app_id());
-  pending_resumption_handler_->ClearPendingResumptionRequests();
-  std::set<uint32_t> apps =
-      application_manager_->GetAppsSubscribedForWayPoints();
-  if (1 == apps.size() &&
-      application_manager_->IsAppSubscribedForWayPoints(*application)) {
-    auto subscribe_waypoints_msg =
-        application_manager::MessageHelper::CreateMessageForHMI(
-            hmi_apis::FunctionID::Navigation_UnsubscribeWayPoints,
-            application_manager_->GetNextHMICorrelationID());
-    (*subscribe_waypoints_msg)[application_manager::strings::params]
-                              [application_manager::strings::message_type] =
-                                  hmi_apis::messageType::request;
-    (*subscribe_waypoints_msg)[application_manager::strings::msg_params]
-                              [application_manager::strings::app_id] =
-                                  app.app_id();
+void SDLRPCPlugin::RevertResumption(application_manager::Application& app,
+                                    bool is_way_point_request_successful) {
+  LOG4CXX_AUTO_TRACE(logger_);
 
-    application_manager_->GetRPCService().ManageHMICommand(
-        subscribe_waypoints_msg);
+  pending_resumption_handler_->ClearPendingResumptionRequests();
+
+  if (application_manager_->IsAppSubscribedForWayPoints(app)) {
+    application_manager_->UnsubscribeAppFromWayPoints(app.app_id());
+    if (!application_manager_->IsAnyAppSubscribedForWayPoints() &&
+        is_way_point_request_successful) {
+      LOG4CXX_ERROR(logger_, "Send UnsubscribeWayPoints");
+      application_manager::MessageHelper::SendUnsubscribedWayPoints(
+          *application_manager_);
+    }
   }
-  application_manager_->UnsubscribeAppFromWayPoints(application);
 }
 
 void SDLRPCPlugin::ClearSubscriptions(app_mngr::ApplicationSharedPtr app) {

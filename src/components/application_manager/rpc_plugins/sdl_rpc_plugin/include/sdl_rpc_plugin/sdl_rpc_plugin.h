@@ -73,9 +73,12 @@ class SDLRPCPlugin : public plugins::RPCPlugin {
 
   /**
    * @brief Revert the data to the state before Resumption.
-   * @param subscriptions Subscriptions to be returned
+   * @param app Application owning resumption data
+   * @param is_way_point_request_successful true on successful subscription,
+   * false otherwise
    **/
-  void RevertResumption(application_manager::Application& app);
+  void RevertResumption(application_manager::Application& app,
+                        bool is_way_point_request_successful);
 
   /**
    * @brief SaveResumptionData saves subscription data
