@@ -925,6 +925,24 @@ void ResumptionDataProcessor::DeleteWindowsSubscriptions(
   }
 }
 
+bool FindWayPointsResumptionRequest(std::vector<ResumptionRequest>& requests) {
+  using namespace utils;
+
+  auto request_it = std::find_if(
+      requests.begin(), requests.end(), [](const ResumptionRequest& request) {
+        if (hmi_apis::FunctionID::Navigation_SubscribeWayPoints ==
+            request.request_ids.function_id) {
+          return true;
+        }
+        return false;
+      });
+
+  if (requests.end() != request_it) {
+    return true;
+  }
+  return false;
+}
+
 void ResumptionDataProcessor::DeletePluginsSubscriptions(
     application_manager::ApplicationSharedPtr application) {
   LOG4CXX_AUTO_TRACE(logger_);
@@ -943,6 +961,14 @@ void ResumptionDataProcessor::DeletePluginsSubscriptions(
     extension_subscriptions[ivi] = true;
   }
   resumption_status_lock_.Release();
+
+  auto failed_requests = GetAllFailedRequests(
+      application->app_id(), resumption_status_, resumption_status_lock_);
+  bool is_way_points_request_failed =
+      FindWayPointsResumptionRequest(failed_requests);
+  if (is_way_points_request_failed) {
+    extension_subscriptions[strings::subscribed_for_way_points] = false;
+  }
 
   for (auto& extension : application->Extensions()) {
     extension->RevertResumption(extension_subscriptions);
