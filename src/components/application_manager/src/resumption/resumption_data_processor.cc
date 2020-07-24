@@ -354,6 +354,26 @@ void ResumptionDataProcessor::on_event(const event_engine::Event& event) {
       event.smart_object(), event.id(), event.smart_object_correlation_id());
 }
 
+std::vector<ResumptionRequest> GetAllFailedRequests(
+    uint32_t app_id,
+    const std::map<std::int32_t, ApplicationResumptionStatus>&
+        resumption_status,
+    sync_primitives::RWLock& resumption_status_lock) {
+  resumption_status_lock.AcquireForReading();
+  std::vector<ResumptionRequest> failed_requests;
+  std::vector<ResumptionRequest> missed_requests;
+  auto it = resumption_status.find(app_id);
+  if (it != resumption_status.end()) {
+    failed_requests = it->second.error_requests;
+    missed_requests = it->second.list_of_sent_requests;
+  }
+  resumption_status_lock.Release();
+
+  failed_requests.insert(
+      failed_requests.end(), missed_requests.begin(), missed_requests.end());
+  return failed_requests;
+}
+
 void ResumptionDataProcessor::RevertRestoredData(
     ApplicationSharedPtr application) {
   LOG4CXX_AUTO_TRACE(logger_);
@@ -506,46 +526,45 @@ void ResumptionDataProcessor::AddSubmenues(
       application, application_manager_));
 }
 
+utils::Optional<ResumptionRequest> FindResumptionSubmenuRequest(
+    uint32_t menu_id, std::vector<ResumptionRequest>& requests) {
+  using namespace utils;
+
+  auto request_it = std::find_if(
+      requests.begin(),
+      requests.end(),
+      [menu_id](const ResumptionRequest& request) {
+        auto& msg_params = request.message[strings::msg_params];
+        if (hmi_apis::FunctionID::UI_AddSubMenu ==
+            request.request_ids.function_id) {
+          uint32_t failed_menu_id = msg_params[strings::menu_id].asUInt();
+          return failed_menu_id == menu_id;
+        }
+        return false;
+      });
+  if (requests.end() != request_it) {
+    return Optional<ResumptionRequest>(*request_it);
+  }
+  return Optional<ResumptionRequest>::OptionalEmpty::EMPTY;
+}
+
 void ResumptionDataProcessor::DeleteSubmenues(
     ApplicationSharedPtr application) {
   LOG4CXX_AUTO_TRACE(logger_);
-  const uint32_t app_id = application->app_id();
 
-  resumption_status_lock_.AcquireForReading();
-  std::vector<ResumptionRequest> requests;
-  if (resumption_status_.find(app_id) != resumption_status_.end()) {
-    ApplicationResumptionStatus& status = resumption_status_[app_id];
-    requests = status.successful_requests;
-    requests.insert(requests.begin(),
-                    status.error_requests.begin(),
-                    status.error_requests.end());
-  }
-  resumption_status_lock_.Release();
+  auto failed_requests = GetAllFailedRequests(
+      application->app_id(), resumption_status_, resumption_status_lock_);
 
-  for (auto request : requests) {
-    if (hmi_apis::FunctionID::UI_AddSubMenu ==
-        request.request_ids.function_id) {
-      smart_objects::SmartObjectSPtr ui_sub_menu =
-          MessageHelper::CreateMessageForHMI(
-              hmi_apis::messageType::request,
-              application_manager_.GetNextHMICorrelationID());
+  auto smap = application->sub_menu_map().GetData();
 
-      (*ui_sub_menu)[strings::params][strings::function_id] =
-          hmi_apis::FunctionID::UI_DeleteSubMenu;
-
-      smart_objects::SmartObject msg_params =
-          smart_objects::SmartObject(smart_objects::SmartType_Map);
-
-      msg_params[strings::menu_id] =
-          request.message[strings::msg_params][strings::menu_id];
-      msg_params[strings::app_id] =
-          request.message[strings::msg_params][strings::app_id];
-
-      (*ui_sub_menu)[strings::msg_params] = msg_params;
-
-      application->RemoveSubMenu(msg_params[strings::menu_id].asInt());
-      ProcessMessageToHMI(ui_sub_menu, false);  // subscribe_on_response = false
+  for (auto smenu : smap) {
+    auto failed_submenu_request =
+        FindResumptionSubmenuRequest(smenu.first, failed_requests);
+    if (!failed_submenu_request) {
+      MessageHelper::SendDeleteSubmenuRequest(
+          smenu.second, application, application_manager_);
     }
+    application->RemoveSubMenu(smenu.first);
   }
 }
 
@@ -606,26 +625,6 @@ utils::Optional<ResumptionRequest> FindCommandResumptionRequest(
   }
 
   return Optional<ResumptionRequest>::OptionalEmpty::EMPTY;
-}
-
-std::vector<ResumptionRequest> GetAllFailedRequests(
-    uint32_t app_id,
-    const std::map<std::int32_t, ApplicationResumptionStatus>&
-        resumption_status,
-    sync_primitives::RWLock& resumption_status_lock) {
-  resumption_status_lock.AcquireForReading();
-  std::vector<ResumptionRequest> failed_requests;
-  std::vector<ResumptionRequest> missed_requests;
-  auto it = resumption_status.find(app_id);
-  if (it != resumption_status.end()) {
-    failed_requests = it->second.error_requests;
-    missed_requests = it->second.list_of_sent_requests;
-  }
-  resumption_status_lock.Release();
-
-  failed_requests.insert(
-      failed_requests.end(), missed_requests.begin(), missed_requests.end());
-  return failed_requests;
 }
 
 void ResumptionDataProcessor::DeleteCommands(ApplicationSharedPtr application) {
