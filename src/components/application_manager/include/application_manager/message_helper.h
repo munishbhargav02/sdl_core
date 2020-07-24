@@ -675,8 +675,8 @@ class MessageHelper {
    * @param correlation_id  Correlation ID
    * @return request Request to HMI
    */
-  static ns_smart_device_link::ns_smart_objects::SmartObjectSPtr
-  CreateUnsubscribeWayPointsRequest(const uint32_t correlation_id);
+  static smart_objects::SmartObjectSPtr CreateUnsubscribeWayPointsRequest(
+      const uint32_t correlation_id);
 
   static smart_objects::SmartObjectSPtr CreateNegativeResponse(
       uint32_t connection_key,
