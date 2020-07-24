@@ -11,7 +11,9 @@ void DeleteWayPoints(ApplicationSharedPtr app,
                      ApplicationManager& app_manager) {
   app_manager.UnsubscribeAppFromWayPoints(app);
   if (!app_manager.IsAnyAppSubscribedForWayPoints()) {
-    MessageHelper::SendUnsubscribedWayPoints(app_manager);
+    auto request = MessageHelper::CreateUnsubscribeWayPointsRequest(
+        app_manager.GetNextHMICorrelationID());
+    app_manager.GetRPCService().ManageHMICommand(request);
   }
 }
 
