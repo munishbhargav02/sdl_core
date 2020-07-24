@@ -3308,7 +3308,9 @@ void ApplicationManagerImpl::UnregisterApplication(
       UnsubscribeAppFromWayPoints(app_id);
       if (!IsAnyAppSubscribedForWayPoints()) {
         LOG4CXX_ERROR(logger_, "Send UnsubscribeWayPoints");
-        MessageHelper::SendUnsubscribedWayPoints(*this);
+        auto request = MessageHelper::CreateUnsubscribeWayPointsRequest(
+            GetNextHMICorrelationID());
+        rpc_service_->ManageHMICommand(request);
       }
     }
 
