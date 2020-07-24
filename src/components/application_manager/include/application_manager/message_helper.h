@@ -661,7 +661,6 @@ class MessageHelper {
   static void SendOnDataStreaming(protocol_handler::ServiceType service,
                                   bool available,
                                   ApplicationManager& app_mngr);
-
   /**
    * @brief Sends notification to HMI to stop audioPathThru
    *
@@ -672,10 +671,12 @@ class MessageHelper {
   static bool SendStopAudioPathThru(ApplicationManager& app_mngr);
 
   /**
-   * @brief Sends UnsubscribeWayPoints request
-   * @return true if UnsubscribedWayPoints is send otherwise false
+   * @brief Creates UnsubscribeWayPoints request
+   * @param correlation_id  Correlation ID
+   * @return request Request to HMI
    */
-  static bool SendUnsubscribedWayPoints(ApplicationManager& app_mngr);
+  static smart_objects::SmartObjectSPtr CreateUnsubscribeWayPointsRequest(
+      const uint32_t correlation_id);
 
   static smart_objects::SmartObjectSPtr CreateNegativeResponse(
       uint32_t connection_key,

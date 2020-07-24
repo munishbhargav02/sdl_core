@@ -265,12 +265,6 @@ class ResumptionDataProcessor : public app_mngr::event_engine::EventObserver {
   void DeletePluginsSubscriptions(app_mngr::ApplicationSharedPtr application);
 
   /**
-   * @brief Deleting subscription for WayPoints have been resumed
-   * @param shared ptr to application
-   */
-  void DeleteWayPointsSubscription(app_mngr::ApplicationSharedPtr application);
-
-  /**
    * @brief Deletting subscription for CreateWindow have been resumed
    * @param shared ptr to application
    */

@@ -68,6 +68,8 @@ void SDLAppExtension::ProcessResumption(
 
 void SDLAppExtension::RevertResumption(
     const smart_objects::SmartObject& subscriptions) {
-  plugin_.RevertResumption(app_);
+  const bool is_way_point_request_successful =
+      !subscriptions.keyExists(strings::subscribed_for_way_points);
+  plugin_.RevertResumption(app_, is_way_point_request_successful);
 }
 }  // namespace sdl_rpc_plugin

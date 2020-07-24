@@ -232,13 +232,10 @@ smart_objects::SmartObjectSPtr VehicleInfoPlugin::CreateUnsubscriptionRequest(
 bool VehicleInfoPlugin::IsSubscribedAppExist(const std::string& ivi) {
   LOG4CXX_AUTO_TRACE(logger_);
   auto applications = application_manager_->applications();
-  const auto it = application_manager::MessageHelper::vehicle_data().find(ivi);
-  DCHECK_OR_RETURN(
-      it != application_manager::MessageHelper::vehicle_data().end(), false);
-  auto ivi_enum = it->first;
+
   for (auto& app : applications.GetData()) {
     auto& ext = VehicleInfoAppExtension::ExtractVIExtension(*app);
-    if (ext.isSubscribedToVehicleInfo(ivi_enum)) {
+    if (ext.isSubscribedToVehicleInfo(ivi)) {
       return true;
     }
   }
