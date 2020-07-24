@@ -521,9 +521,10 @@ void MessageHelper::SendLaunchApp(const uint32_t connection_key,
       connection_key, urlSchema, packageName, app_man);
 }
 
-bool MessageHelper::SendUnsubscribedWayPoints(ApplicationManager& app_mngr) {
-  return MockMessageHelper::message_helper_mock()->SendUnsubscribedWayPoints(
-      app_mngr);
+smart_objects::SmartObjectSPtr MessageHelper::CreateUnsubscribeWayPointsRequest(
+    const uint32_t correlation_id) {
+  return MockMessageHelper::message_helper_mock()
+      ->CreateUnsubscribeWayPointsRequest(correlation_id);
 }
 
 void MessageHelper::SendQueryApps(const uint32_t connection_key,

@@ -311,7 +311,8 @@ class MockMessageHelper {
                     const std::string& urlSchema,
                     const std::string& packageName,
                     ApplicationManager& app_man));
-  MOCK_METHOD1(SendUnsubscribedWayPoints, bool(ApplicationManager& app_mngr));
+  MOCK_METHOD1(CreateUnsubscribeWayPointsRequest,
+               smart_objects::SmartObjectSPtr(const uint32_t correlation_id));
 
   MOCK_METHOD2(SendQueryApps,
                void(const uint32_t connection_key,

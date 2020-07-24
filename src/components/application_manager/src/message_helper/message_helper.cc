@@ -2697,16 +2697,16 @@ bool MessageHelper::SendStopAudioPathThru(ApplicationManager& app_mngr) {
   return app_mngr.GetRPCService().ManageHMICommand(result);
 }
 
-bool MessageHelper::SendUnsubscribedWayPoints(ApplicationManager& app_mngr) {
-  LOG4CXX_INFO(logger_, "MessageHelper::SendUnsubscribedWayPoints");
+smart_objects::SmartObjectSPtr MessageHelper::CreateUnsubscribeWayPointsRequest(
+    const uint32_t correlation_id) {
+  LOG4CXX_INFO(logger_, "MessageHelper::CreateUnsubscribeWayPointsRequest");
 
-  smart_objects::SmartObjectSPtr result = CreateMessageForHMI(
-      hmi_apis::messageType::request, app_mngr.GetNextHMICorrelationID());
+  smart_objects::SmartObjectSPtr result =
+      CreateMessageForHMI(hmi_apis::messageType::request, correlation_id);
 
   (*result)[strings::params][strings::function_id] =
       hmi_apis::FunctionID::Navigation_UnsubscribeWayPoints;
-
-  return app_mngr.GetRPCService().ManageHMICommand(result);
+  return result;
 }
 
 void MessageHelper::SendPolicySnapshotNotification(
