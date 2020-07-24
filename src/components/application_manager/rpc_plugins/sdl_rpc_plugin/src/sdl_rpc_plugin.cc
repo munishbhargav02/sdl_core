@@ -142,9 +142,11 @@ void SDLRPCPlugin::RevertResumption(application_manager::Application& app,
     application_manager_->UnsubscribeAppFromWayPoints(app.app_id());
     if (!application_manager_->IsAnyAppSubscribedForWayPoints() &&
         is_way_point_request_successful) {
-      LOG4CXX_ERROR(logger_, "Send UnsubscribeWayPoints");
-      application_manager::MessageHelper::SendUnsubscribedWayPoints(
-          *application_manager_);
+      LOG4CXX_DEBUG(logger_, "Send UnsubscribeWayPoints");
+      auto request =
+          application_manager::MessageHelper::CreateUnsubscribeWayPointsRequest(
+              application_manager_->GetNextHMICorrelationID());
+      application_manager_->GetRPCService().ManageHMICommand(request);
     }
   }
 }
