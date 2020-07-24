@@ -344,10 +344,14 @@ class MockMessageHelper {
   MOCK_METHOD2(GetDeviceMacAddressForHandle,
                std::string(const transport_manager::DeviceHandle device_handle,
                            const ApplicationManager& app_mngr));
-  MOCK_METHOD3(SendDeleteCommandRequest,
-               void(smart_objects::SmartObject* cmd,
-                    ApplicationSharedPtr application,
-                    ApplicationManager& app_mngr));
+  MOCK_METHOD3(CreateDeleteUICommandRequest,
+               smart_objects::SmartObject(smart_objects::SmartObject* cmd,
+                                          ApplicationSharedPtr application,
+                                          ApplicationManager& app_mngr));
+  MOCK_METHOD3(CreateDeleteVRCommandRequest,
+               smart_objects::SmartObject(smart_objects::SmartObject* cmd,
+                                          ApplicationSharedPtr application,
+                                          ApplicationManager& app_mngr));
   MOCK_METHOD3(SendDeleteSubmenuRequest,
                void(smart_objects::SmartObject* cmd,
                     ApplicationSharedPtr application,

@@ -573,12 +573,91 @@ void ResumptionDataProcessor::AddCommands(
       application, application_manager_));
 }
 
+utils::Optional<ResumptionRequest> FindCommandResumptionRequest(
+    uint32_t command_id, std::vector<ResumptionRequest>& requests) {
+  using namespace utils;
+
+  auto request_it = std::find_if(
+      requests.begin(),
+      requests.end(),
+      [command_id](const ResumptionRequest& request) {
+        auto& msg_params = request.message[strings::msg_params];
+        const bool is_vr_command = hmi_apis::FunctionID::VR_AddCommand ==
+                                       request.request_ids.function_id &&
+                                   hmi_apis::Common_VRCommandType::Command ==
+                                       msg_params[strings::type].asInt();
+        const bool is_ui_command = hmi_apis::FunctionID::UI_AddCommand ==
+                                   request.request_ids.function_id;
+
+        if (is_vr_command || is_ui_command) {
+          uint32_t cmd_id = msg_params[strings::cmd_id].asUInt();
+          return cmd_id == command_id;
+        }
+
+        return false;
+      });
+
+  if (requests.end() != request_it) {
+    return Optional<ResumptionRequest>(*request_it);
+  }
+
+  return Optional<ResumptionRequest>::OptionalEmpty::EMPTY;
+}
+
+std::vector<ResumptionRequest> GetAllFailedRequests(
+    uint32_t app_id,
+    const std::map<std::int32_t, ApplicationResumptionStatus>&
+        resumption_status,
+    sync_primitives::RWLock& resumption_status_lock) {
+  resumption_status_lock.AcquireForReading();
+  std::vector<ResumptionRequest> failed_requests;
+  std::vector<ResumptionRequest> missed_requests;
+  auto it = resumption_status.find(app_id);
+  if (it != resumption_status.end()) {
+    failed_requests = it->second.error_requests;
+    missed_requests = it->second.list_of_sent_requests;
+  }
+  resumption_status_lock.Release();
+
+  failed_requests.insert(
+      failed_requests.end(), missed_requests.begin(), missed_requests.end());
+  return failed_requests;
+}
+
 void ResumptionDataProcessor::DeleteCommands(ApplicationSharedPtr application) {
+  LOG4CXX_AUTO_TRACE(logger_);
+
+  auto failed_requests = GetAllFailedRequests(
+      application->app_id(), resumption_status_, resumption_status_lock_);
+
   app_mngr::CommandsMap cmap = application->commands_map().GetData();
 
+  auto is_vr_command_failed = [](const ResumptionRequest& failed_command) {
+    return failed_command.message[strings::msg_params].keyExists(
+        strings::vr_commands);
+  };
+
   for (auto cmd : cmap) {
-    MessageHelper::SendDeleteCommandRequest(
-        cmd.second, application, application_manager_);
+    auto failed_command =
+        FindCommandResumptionRequest(cmd.first, failed_requests);
+
+    if (!failed_command || (!is_vr_command_failed(*failed_command))) {
+      auto delete_VR_command_msg = MessageHelper::CreateDeleteVRCommandRequest(
+          cmd.second,
+          application,
+          application_manager_.GetNextHMICorrelationID());
+      application_manager_.GetRPCService().ManageHMICommand(
+          delete_VR_command_msg);
+    }
+    if (!failed_command || (is_vr_command_failed(*failed_command))) {
+      auto delete_UI_command_msg = MessageHelper::CreateDeleteUICommandRequest(
+          cmd.second,
+          application->app_id(),
+          application_manager_.GetNextHMICorrelationID());
+      application_manager_.GetRPCService().ManageHMICommand(
+          delete_UI_command_msg);
+    }
+
     application->RemoveCommand(cmd.first);
     application->help_prompt_manager().OnVrCommandDeleted(cmd.first, true);
   }
@@ -606,15 +685,44 @@ void ResumptionDataProcessor::AddChoicesets(
   ProcessHMIRequests(MessageHelper::CreateAddVRCommandRequestFromChoiceToHMI(
       application, application_manager_));
 }
+utils::Optional<ResumptionRequest> FindResumptionChoiceSetRequest(
+    uint32_t command_id, std::vector<ResumptionRequest>& requests) {
+  using namespace utils;
+
+  auto request_it =
+      std::find_if(requests.begin(),
+                   requests.end(),
+                   [command_id](const ResumptionRequest& request) {
+                     auto& msg_params = request.message[strings::msg_params];
+                     if (msg_params.keyExists(strings::cmd_id) &&
+                         (msg_params[strings::type] ==
+                          hmi_apis::Common_VRCommandType::Choice)) {
+                       uint32_t cmd_id = msg_params[strings::cmd_id].asUInt();
+                       return cmd_id == command_id;
+                     }
+                     return false;
+                   });
+  if (requests.end() != request_it) {
+    return Optional<ResumptionRequest>(*request_it);
+  }
+  return Optional<ResumptionRequest>::OptionalEmpty::EMPTY;
+}
 
 void ResumptionDataProcessor::DeleteChoicesets(
     ApplicationSharedPtr application) {
   LOG4CXX_AUTO_TRACE(logger_);
 
+  auto failed_requests = GetAllFailedRequests(
+      application->app_id(), resumption_status_, resumption_status_lock_);
+
   auto choices = application->choice_set_map().GetData();
   for (auto& choice : choices) {
-    MessageHelper::SendDeleteChoiceSetRequest(
-        choice.second, application, application_manager_);
+    auto failed_choice_set =
+        FindResumptionChoiceSetRequest(choice.first, failed_requests);
+    if (!failed_choice_set) {
+      MessageHelper::SendDeleteChoiceSetRequest(
+          choice.second, application, application_manager_);
+    }
     application->RemoveChoiceSet(choice.first);
   }
 }
