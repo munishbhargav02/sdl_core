@@ -29,8 +29,10 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-
 #include "application_manager/display_capabilities_builder.h"
+
+#include <algorithm>
+
 #include "application_manager/message_helper.h"
 #include "application_manager/smart_object_keys.h"
 namespace application_manager {
@@ -152,7 +154,27 @@ bool DisplayCapabilitiesBuilder::IsWaitingForWindowCapabilities(
 void DisplayCapabilitiesBuilder::ResetDisplayCapabilities() {
   LOG4CXX_AUTO_TRACE(logger_);
   sync_primitives::AutoLock lock(display_capabilities_lock_);
-  display_capabilities_.reset();
+  for (auto& window_id : window_ids_to_resume_) {
+    if (kDefaultWindowID != window_id) {
+      window_ids_to_resume_.erase(window_id);
+    }
+  }
+
+  if (display_capabilities_) {
+    auto* cur_window_caps_ptr =
+        (*display_capabilities_)[0][strings::window_capabilities].asArray();
+    if (cur_window_caps_ptr) {
+      for (auto it = cur_window_caps_ptr->begin();
+           it != cur_window_caps_ptr->end();) {
+        if ((*it).keyExists(strings::window_id) &&
+            (*it)[strings::window_id].asInt() != kDefaultWindowID) {
+          it = cur_window_caps_ptr->erase(it);
+        } else {
+          ++it;
+        }
+      }
+    }
+  }
 }
 
 void DisplayCapabilitiesBuilder::StopWaitingForWindow(

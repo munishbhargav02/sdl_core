@@ -1777,7 +1777,34 @@ smart_objects::SmartObjectSPtr MessageHelper::CreateUICreateWindowRequestToHMI(
         window_info[strings::duplicate_updates_from_window_id].asInt();
   }
 
-  msg_params[strings::app_id] = application->hmi_app_id();
+  msg_params[strings::app_id] = application->app_id();
+
+  (*ui_request)[strings::msg_params] = msg_params;
+
+  return ui_request;
+}
+
+smart_objects::SmartObjectSPtr MessageHelper::CreateUIDeleteWindowRequestToHMI(
+    ApplicationSharedPtr application,
+    ApplicationManager& app_mngr,
+    const WindowID window_id) {
+  LOG4CXX_AUTO_TRACE(logger_);
+  auto ui_request = CreateMessageForHMI(hmi_apis::messageType::request,
+                                        app_mngr.GetNextHMICorrelationID());
+
+  (*ui_request)[strings::params][strings::function_id] =
+      static_cast<int>(hmi_apis::FunctionID::UI_DeleteWindow);
+
+  (*ui_request)[strings::correlation_id] =
+      (*ui_request)[strings::params][strings::correlation_id];
+  (*ui_request)[strings::function_id] =
+      (*ui_request)[strings::params][strings::function_id];
+
+  smart_objects::SmartObject msg_params(
+      smart_objects::SmartObject(smart_objects::SmartType_Map));
+
+  msg_params[strings::window_id] = window_id;
+  msg_params[strings::app_id] = application->app_id();
 
   (*ui_request)[strings::msg_params] = msg_params;
 
@@ -2438,6 +2465,30 @@ smart_objects::SmartObjectSPtr MessageHelper::CreateNegativeResponse(
   response_data[strings::params][strings::connection_key] = connection_key;
 
   return std::make_shared<smart_objects::SmartObject>(response_data);
+}
+
+smart_objects::SmartObjectSPtr MessageHelper::CreateNegativeResponseFromHmi(
+    const int32_t function_id,
+    const uint32_t correlation_id,
+    const int32_t result_code,
+    const std::string& info) {
+  smart_objects::SmartObjectSPtr message =
+      std::make_shared<smart_objects::SmartObject>(
+          smart_objects::SmartType_Map);
+
+  (*message)[strings::params][strings::function_id] = function_id;
+  (*message)[strings::params][strings::protocol_type] =
+      commands::CommandImpl::hmi_protocol_type_;
+  (*message)[strings::params][strings::protocol_version] =
+      commands::CommandImpl::protocol_version_;
+  (*message)[strings::params][strings::correlation_id] = correlation_id;
+
+  (*message)[strings::params][strings::message_type] =
+      MessageType::kErrorResponse;
+  (*message)[strings::params][hmi_response::code] = result_code;
+  (*message)[strings::params][strings::error_msg] = info;
+
+  return message;
 }
 
 smart_objects::SmartObjectSPtr MessageHelper::CreateOnServiceUpdateNotification(

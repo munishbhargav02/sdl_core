@@ -684,6 +684,20 @@ class MessageHelper {
       int32_t result_code);
 
   /**
+   * @brief Creates negative response message from HMI using provided params
+   * @param function_id id of function
+   * @param correlation_id correlation id
+   * @param result_code result code
+   * @param info info message
+   * @return pointer to created message
+   */
+  static smart_objects::SmartObjectSPtr CreateNegativeResponseFromHmi(
+      const int32_t function_id,
+      const uint32_t correlation_id,
+      const int32_t result_code,
+      const std::string& info);
+
+  /**
    * @brief Get the full file path of an app file
    *
    * @param file_name The relative path of an application file
@@ -1086,6 +1100,19 @@ class MessageHelper {
    */
   static smart_objects::SmartObjectSPtr CreateDisplayCapabilityUpdateToMobile(
       const smart_objects::SmartObject& system_capabilities, Application& app);
+
+  /**
+   * @brief CreateUIDeleteWindowRequestToHMI creates request to delete specified
+   * window
+   * @param application reference to related application
+   * @param app_mngr reference to application manager instance
+   * @param window_id id of window to delete
+   * @return shared ptr to request SO
+   */
+  static smart_objects::SmartObjectSPtr CreateUIDeleteWindowRequestToHMI(
+      ApplicationSharedPtr application,
+      ApplicationManager& app_mngr,
+      const WindowID window_id);
 
  private:
   /**

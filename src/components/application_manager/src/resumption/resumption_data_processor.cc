@@ -29,6 +29,7 @@
 
 #include "application_manager/application_manager.h"
 #include "application_manager/commands/command_impl.h"
+#include "application_manager/display_capabilities_builder.h"
 #include "application_manager/event_engine/event_observer.h"
 #include "application_manager/message_helper.h"
 #include "application_manager/resumption/resumption_data_processor.h"
@@ -76,6 +77,7 @@ void ResumptionDataProcessor::Restore(ApplicationSharedPtr application,
   AddChoicesets(application, saved_app);
   SetGlobalProperties(application, saved_app);
   AddSubscriptions(application, saved_app);
+  AddWindows(application, saved_app);
 
   resumption_status_lock_.AcquireForReading();
   const auto app_id = application->app_id();
@@ -90,7 +92,9 @@ void ResumptionDataProcessor::Restore(ApplicationSharedPtr application,
     sync_primitives::AutoWriteLock lock(register_callbacks_lock_);
     register_callbacks_[app_id] = callback;
   } else {
-    LOG4CXX_DEBUG(logger_, "No requests to HMI, resumption is successful");
+    LOG4CXX_DEBUG(
+        logger_,
+        "No requests to HMI for " << app_id << " , resumption is successful");
     callback(mobile_apis::Result::SUCCESS, "Data resumption successful");
   }
 }
@@ -102,7 +106,8 @@ bool ResumptionDataProcessor::HasDataToRestore(
   const bool has_data_to_restore =
       !saved_app[strings::application_submenus].empty() ||
       !saved_app[strings::application_commands].empty() ||
-      !saved_app[strings::application_choice_sets].empty();
+      !saved_app[strings::application_choice_sets].empty() ||
+      !saved_app[strings::windows_info].empty();
 
   LOG4CXX_DEBUG(logger_,
                 std::boolalpha << "Application has data to restore: "
@@ -184,67 +189,21 @@ bool ResumptionRequestIDs::operator<(const ResumptionRequestIDs& other) const {
          function_id < other.function_id;
 }
 
-void ResumptionDataProcessor::HandleOnTimeOut(
-    const uint32_t corr_id, const hmi_apis::FunctionID::eType function_id) {
-  LOG4CXX_AUTO_TRACE(logger_);
-  LOG4CXX_DEBUG(logger_,
-                "Handling timeout with corr id: "
-                    << corr_id << " and function_id: " << function_id);
-  uint32_t app_id = 0;
-  ApplicationSharedPtr app;
-
-  request_app_ids_lock_.AcquireForReading();
-  auto it = std::find_if(
-      request_app_ids_.begin(),
-      request_app_ids_.end(),
-      [corr_id, function_id](
-          const std::pair<ResumptionRequestIDs, std::uint32_t>& item) {
-        return item.first.function_id == function_id &&
-               item.first.correlation_id == static_cast<int32_t>(corr_id);
-      });
-
-  if (it != request_app_ids_.end()) {
-    app_id = it->second;
-    app = application_manager_.application(app_id);
-  }
-  request_app_ids_lock_.Release();
-
-  if (app && app->is_resuming()) {
-    LOG4CXX_DEBUG(logger_, "Unsubscribing from event: " << function_id);
-    unsubscribe_from_event(function_id);
-
-    register_callbacks_lock_.AcquireForReading();
-    auto it = register_callbacks_.find(app_id);
-    if (it == register_callbacks_.end()) {
-      LOG4CXX_WARN(logger_, "Callback for app_id: " << app_id << " not found");
-
-      register_callbacks_lock_.Release();
-      return;
-    }
-
-    auto callback = it->second;
-    register_callbacks_lock_.Release();
-
-    callback(mobile_apis::Result::RESUME_FAILED, "Data resumption failed");
-
-    RevertRestoredData(application_manager_.application(app_id));
-  }
-}
-
-void ResumptionDataProcessor::on_event(const event_engine::Event& event) {
-  LOG4CXX_AUTO_TRACE(logger_);
-  const smart_objects::SmartObject& response = event.smart_object();
-
+void ResumptionDataProcessor::ProcessResponseFromHMI(
+    const smart_objects::SmartObject& response,
+    const hmi_apis::FunctionID::eType function_id,
+    const int32_t corr_id) {
   ResumptionRequestIDs request_ids;
-  request_ids.function_id = event.id();
-  request_ids.correlation_id = event.smart_object_correlation_id();
+  request_ids.function_id = function_id;
+  request_ids.correlation_id = corr_id;
   // TODO i suppose it can be optimised with moving app id into
   // ResumptionRequest struct, so that we don't have to perform
   // basically the same search twice
   auto predicate =
-      [&event](const std::pair<ResumptionRequestIDs, std::uint32_t>& item) {
-        return item.first.function_id == event.id() &&
-               item.first.correlation_id == event.smart_object_correlation_id();
+      [function_id,
+       corr_id](const std::pair<ResumptionRequestIDs, std::uint32_t>& item) {
+        return item.first.function_id == function_id &&
+               item.first.correlation_id == corr_id;
       };
 
   request_app_ids_lock_.AcquireForReading();
@@ -254,8 +213,7 @@ void ResumptionDataProcessor::on_event(const event_engine::Event& event) {
   if (app_id_ptr == request_app_ids_.end()) {
     LOG4CXX_ERROR(logger_,
                   "application id for correlation id "
-                      << event.smart_object_correlation_id()
-                      << " and function id: " << event.id()
+                      << corr_id << " and function id: " << function_id
                       << " was not found.");
     request_app_ids_lock_.Release();
     return;
@@ -291,10 +249,9 @@ void ResumptionDataProcessor::on_event(const event_engine::Event& event) {
   auto request_ptr =
       std::find_if(list_of_sent_requests.begin(),
                    list_of_sent_requests.end(),
-                   [&event](const ResumptionRequest& request) {
-                     return request.request_ids.correlation_id ==
-                                event.smart_object_correlation_id() &&
-                            request.request_ids.function_id == event.id();
+                   [function_id, corr_id](const ResumptionRequest& request) {
+                     return request.request_ids.correlation_id == corr_id &&
+                            request.request_ids.function_id == function_id;
                    });
 
   if (list_of_sent_requests.end() == request_ptr) {
@@ -303,7 +260,7 @@ void ResumptionDataProcessor::on_event(const event_engine::Event& event) {
     return;
   }
 
-  if (IsRequestSuccessful(response)) {
+  if (IsResponseSuccessful(response)) {
     status.successful_requests.push_back(*request_ptr);
   } else {
     status.error_requests.push_back(*request_ptr);
@@ -312,6 +269,10 @@ void ResumptionDataProcessor::on_event(const event_engine::Event& event) {
   if (hmi_apis::FunctionID::VehicleInfo_SubscribeVehicleData ==
       request_ids.function_id) {
     CheckVehicleDataResponse(request_ptr->message, response, status);
+  }
+
+  if (hmi_apis::FunctionID::UI_CreateWindow == request_ids.function_id) {
+    CheckCreateWindowResponse(request_ptr->message, response);
   }
 
   list_of_sent_requests.erase(request_ptr);
@@ -346,12 +307,14 @@ void ResumptionDataProcessor::on_event(const event_engine::Event& event) {
   if (successful_resumption) {
     LOG4CXX_DEBUG(logger_, "Resumption for app " << app_id << " successful");
     callback(mobile_apis::Result::SUCCESS, "Data resumption succesful");
+    application_manager_.state_controller().ResumePostponedWindows(app_id);
   }
 
   if (!successful_resumption) {
     LOG4CXX_ERROR(logger_, "Resumption for app " << app_id << " failed");
     callback(mobile_apis::Result::RESUME_FAILED, "Data resumption failed");
     RevertRestoredData(application_manager_.application(app_id));
+    application_manager_.state_controller().DropPostponedWindows(app_id);
   }
 
   resumption_status_lock_.AcquireForWriting();
@@ -367,6 +330,30 @@ void ResumptionDataProcessor::on_event(const event_engine::Event& event) {
   register_callbacks_lock_.Release();
 }
 
+void ResumptionDataProcessor::HandleOnTimeOut(
+    const uint32_t corr_id, const hmi_apis::FunctionID::eType function_id) {
+  LOG4CXX_AUTO_TRACE(logger_);
+  LOG4CXX_DEBUG(logger_,
+                "Handling timeout with corr id: "
+                    << corr_id << " and function_id: " << function_id);
+
+  auto error_response = MessageHelper::CreateNegativeResponseFromHmi(
+      function_id,
+      corr_id,
+      hmi_apis::Common_Result::GENERIC_ERROR,
+      std::string());
+  if (error_response) {
+    ProcessResponseFromHMI(*error_response, function_id, corr_id);
+  }
+}
+
+void ResumptionDataProcessor::on_event(const event_engine::Event& event) {
+  LOG4CXX_AUTO_TRACE(logger_);
+  LOG4CXX_DEBUG(logger_, "Handling response message from HMI");
+  ProcessResponseFromHMI(
+      event.smart_object(), event.id(), event.smart_object_correlation_id());
+}
+
 void ResumptionDataProcessor::RevertRestoredData(
     ApplicationSharedPtr application) {
   LOG4CXX_AUTO_TRACE(logger_);
@@ -377,6 +364,7 @@ void ResumptionDataProcessor::RevertRestoredData(
   DeleteChoicesets(application);
   DeleteGlobalProperties(application);
   DeleteSubscriptions(application);
+  DeleteWindowsSubscriptions(application);
 
   resumption_status_lock_.AcquireForWriting();
   resumption_status_.erase(application->app_id());
@@ -406,41 +394,40 @@ void ResumptionDataProcessor::WaitForResponse(
   request_app_ids_lock_.Release();
 }
 
-void ResumptionDataProcessor::ProcessHMIRequest(
-    smart_objects::SmartObjectSPtr request, bool subscribe_on_response) {
+void ResumptionDataProcessor::ProcessMessageToHMI(
+    smart_objects::SmartObjectSPtr message, bool subscribe_on_response) {
   LOG4CXX_AUTO_TRACE(logger_);
   if (subscribe_on_response) {
     auto function_id = static_cast<hmi_apis::FunctionID::eType>(
-        (*request)[strings::params][strings::function_id].asInt());
+        (*message)[strings::params][strings::function_id].asInt());
 
     const int32_t hmi_correlation_id =
-        (*request)[strings::params][strings::correlation_id].asInt();
+        (*message)[strings::params][strings::correlation_id].asInt();
 
     const int32_t app_id =
-        (*request)[strings::msg_params][strings::app_id].asInt();
+        (*message)[strings::msg_params][strings::app_id].asInt();
 
     ResumptionRequest wait_for_response;
     wait_for_response.request_ids.correlation_id = hmi_correlation_id;
     wait_for_response.request_ids.function_id = function_id;
-    wait_for_response.message = *request;
+    wait_for_response.message = *message;
 
     WaitForResponse(app_id, wait_for_response);
   }
-  if (!application_manager_.GetRPCService().ManageHMICommand(request)) {
+  if (!application_manager_.GetRPCService().ManageHMICommand(message)) {
     LOG4CXX_ERROR(logger_, "Unable to send request");
   }
 }
 
-void ResumptionDataProcessor::ProcessHMIRequests(
-    const smart_objects::SmartObjectList& requests) {
+void ResumptionDataProcessor::ProcessMessagesToHMI(
+    const smart_objects::SmartObjectList& messages) {
   LOG4CXX_AUTO_TRACE(logger_);
-  if (requests.empty()) {
-    LOG4CXX_DEBUG(logger_, "requests list is empty");
-    return;
-  }
+  for (const auto& message : messages) {
+    const bool is_request_message =
+        application_manager::MessageType::kRequest ==
+        (*message)[strings::params][strings::message_type].asInt();
 
-  for (const auto& it : requests) {
-    ProcessHMIRequest(it, true);  // subscribe_on_response = true
+    ProcessMessageToHMI(message, is_request_message);
   }
 }
 
@@ -473,6 +460,23 @@ void ResumptionDataProcessor::AddFiles(
   }
 }
 
+void ResumptionDataProcessor::AddWindows(
+    application_manager::ApplicationSharedPtr application,
+    const ns_smart_device_link::ns_smart_objects::SmartObject& saved_app) {
+  LOG4CXX_AUTO_TRACE(logger_);
+
+  if (!saved_app.keyExists(strings::windows_info)) {
+    LOG4CXX_ERROR(logger_, "windows_info section does not exist");
+    return;
+  }
+
+  const auto& windows_info = saved_app[strings::windows_info];
+  auto request_list = MessageHelper::CreateUICreateWindowRequestsToHMI(
+      application, application_manager_, windows_info);
+
+  ProcessMessagesToHMI(request_list);
+}
+
 void ResumptionDataProcessor::DeleteFiles(ApplicationSharedPtr application) {
   LOG4CXX_AUTO_TRACE(logger_);
   while (!application->getAppFiles().empty()) {
@@ -498,7 +502,7 @@ void ResumptionDataProcessor::AddSubmenues(
     application->AddSubMenu(submenu[strings::menu_id].asUInt(), submenu);
   }
 
-  ProcessHMIRequests(MessageHelper::CreateAddSubMenuRequestsToHMI(
+  ProcessMessagesToHMI(MessageHelper::CreateAddSubMenuRequestsToHMI(
       application, application_manager_));
 }
 
@@ -540,7 +544,7 @@ void ResumptionDataProcessor::DeleteSubmenues(
       (*ui_sub_menu)[strings::msg_params] = msg_params;
 
       application->RemoveSubMenu(msg_params[strings::menu_id].asInt());
-      ProcessHMIRequest(ui_sub_menu, false);  // subscribe_on_response = false
+      ProcessMessageToHMI(ui_sub_menu, false);  // subscribe_on_response = false
     }
   }
 }
@@ -569,7 +573,7 @@ void ResumptionDataProcessor::AddCommands(
         cmd_id, command, true);  // is_resumption =true
   }
 
-  ProcessHMIRequests(MessageHelper::CreateAddCommandRequestToHMI(
+  ProcessMessagesToHMI(MessageHelper::CreateAddCommandRequestToHMI(
       application, application_manager_));
 }
 
@@ -682,7 +686,7 @@ void ResumptionDataProcessor::AddChoicesets(
     application->AddChoiceSet(choice_set_id, choice_set);
   }
 
-  ProcessHMIRequests(MessageHelper::CreateAddVRCommandRequestFromChoiceToHMI(
+  ProcessMessagesToHMI(MessageHelper::CreateAddVRCommandRequestFromChoiceToHMI(
       application, application_manager_));
 }
 utils::Optional<ResumptionRequest> FindResumptionChoiceSetRequest(
@@ -741,7 +745,7 @@ void ResumptionDataProcessor::SetGlobalProperties(
       saved_app[strings::application_global_properties];
   application->load_global_properties(properties_so);
 
-  ProcessHMIRequests(MessageHelper::CreateGlobalPropertiesRequestsToHMI(
+  ProcessMessagesToHMI(MessageHelper::CreateGlobalPropertiesRequestsToHMI(
       application, application_manager_));
 }
 
@@ -783,7 +787,7 @@ void ResumptionDataProcessor::DeleteGlobalProperties(
     (*msg)[strings::params][strings::function_id] =
         hmi_apis::FunctionID::UI_SetGlobalProperties;
     (*msg)[strings::msg_params] = *msg_params;
-    ProcessHMIRequest(msg, false);
+    ProcessMessageToHMI(msg, false);
   }
 
   if (result.HasTTSPropertiesReset() &&
@@ -798,7 +802,7 @@ void ResumptionDataProcessor::DeleteGlobalProperties(
         hmi_apis::FunctionID::TTS_SetGlobalProperties;
 
     (*msg)[strings::msg_params] = *msg_params;
-    ProcessHMIRequest(msg, false);
+    ProcessMessageToHMI(msg, false);
   }
 }
 
@@ -837,7 +841,7 @@ void ResumptionDataProcessor::AddButtonsSubscriptions(
     ButtonSubscriptions button_subscriptions =
         GetButtonSubscriptionsToResume(application);
 
-    ProcessHMIRequests(
+    ProcessMessagesToHMI(
         MessageHelper::CreateOnButtonSubscriptionNotificationsForApp(
             application, application_manager_, button_subscriptions));
   }
@@ -891,8 +895,33 @@ void ResumptionDataProcessor::DeleteButtonsSubscriptions(
     notification = MessageHelper::CreateOnButtonSubscriptionNotification(
         application->hmi_app_id(), hmi_btn, false);
     // is_subscribed = false
-    ProcessHMIRequest(notification, false);
+    ProcessMessageToHMI(notification, false);
     application->UnsubscribeFromButton(btn);
+  }
+}
+
+void ResumptionDataProcessor::DeleteWindowsSubscriptions(
+    ApplicationSharedPtr application) {
+  LOG4CXX_AUTO_TRACE(logger_);
+
+  const auto window_ids = application->GetWindowIds();
+  for (const auto& window_id : window_ids) {
+    const auto hmi_state = application->CurrentHmiState(window_id);
+    if (mobile_apis::WindowType::WIDGET != hmi_state->window_type()) {
+      continue;
+    }
+
+    LOG4CXX_DEBUG(logger_, "Reverting CreateWindow for: " << window_id);
+
+    auto delete_request = MessageHelper::CreateUIDeleteWindowRequestToHMI(
+        application, application_manager_, window_id);
+    const bool subscribe_on_request_events = false;
+    ProcessMessageToHMI(delete_request, subscribe_on_request_events);
+
+    application->RemoveWindowInfo(window_id);
+    application->RemoveHMIState(window_id,
+                                app_mngr::HmiState::StateID::STATE_ID_REGULAR);
+    application->remove_window_capability(window_id);
   }
 }
 
@@ -920,7 +949,7 @@ void ResumptionDataProcessor::DeletePluginsSubscriptions(
   }
 }
 
-bool ResumptionDataProcessor::IsRequestSuccessful(
+bool ResumptionDataProcessor::IsResponseSuccessful(
     const smart_objects::SmartObject& response) const {
   const hmi_apis::Common_Result::eType result_code =
       static_cast<hmi_apis::Common_Result::eType>(
@@ -937,7 +966,7 @@ void ResumptionDataProcessor::CheckVehicleDataResponse(
   LOG4CXX_AUTO_TRACE(logger_);
   const auto request_keys = request[strings::msg_params].enumerate();
 
-  if (!IsRequestSuccessful(response)) {
+  if (!IsResponseSuccessful(response)) {
     LOG4CXX_TRACE(logger_, "Vehicle data request not succesfull");
     for (const auto key : request_keys) {
       status.unsuccesfull_vehicle_data_subscriptions_.push_back(key);
@@ -964,6 +993,66 @@ void ResumptionDataProcessor::CheckVehicleDataResponse(
       status.succesfull_vehicle_data_subscriptions_.push_back(ivi);
     }
   }
+}
+
+void ResumptionDataProcessor::CheckCreateWindowResponse(
+    const smart_objects::SmartObject& request,
+    const smart_objects::SmartObject& response) const {
+  LOG4CXX_AUTO_TRACE(logger_);
+  const auto correlation_id =
+      response[strings::params][strings::correlation_id].asInt();
+
+  const auto& msg_params = request[strings::msg_params];
+  const auto app_id = msg_params[strings::app_id].asInt();
+
+  auto application = application_manager_.application(app_id);
+  if (!application) {
+    LOG4CXX_ERROR(logger_,
+                  "Application is not registered by hmi id: " << app_id);
+    return;
+  }
+
+  const auto window_id = msg_params[strings::window_id].asInt();
+  if (!IsResponseSuccessful(response)) {
+    LOG4CXX_ERROR(logger_,
+                  "UI_CreateWindow for correlation id: " << correlation_id
+                                                         << " has failed");
+    auto& builder = application->display_capabilities_builder();
+    builder.ResetDisplayCapabilities();
+    return;
+  }
+
+  smart_objects::SmartObject window_info(smart_objects::SmartType_Map);
+  auto fill_optional_param = [&window_info,
+                              &msg_params](const std::string& key) {
+    if (msg_params.keyExists(key)) {
+      window_info[key] = msg_params[key].asString();
+    }
+  };
+  fill_optional_param(strings::associated_service_type);
+  fill_optional_param(strings::duplicate_updates_from_window_id);
+
+  const auto window_name = msg_params[strings::window_name].asString();
+  window_info[strings::window_name] = window_name;
+  application->SetWindowInfo(window_id, window_info);
+
+  const auto window_type = static_cast<mobile_apis::WindowType::eType>(
+      msg_params[strings::window_type].asInt());
+
+  // State should be initialized with INVALID_ENUM value to let state controller
+  // trigger OnHmiStatus notifiation sending
+  auto initial_state = application_manager_.CreateRegularState(
+      application,
+      window_type,
+      mobile_apis::HMILevel::INVALID_ENUM,
+      mobile_apis::AudioStreamingState::INVALID_ENUM,
+      mobile_apis::VideoStreamingState::INVALID_ENUM,
+      mobile_apis::SystemContext::INVALID_ENUM);
+  application->SetInitialState(window_id, window_name, initial_state);
+
+  // Default HMI level for all windows except the main one is always NONE
+  application_manager_.state_controller().OnAppWindowAdded(
+      application, window_id, window_type, mobile_apis::HMILevel::HMI_NONE);
 }
 
 }  // namespace resumption

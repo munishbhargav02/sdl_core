@@ -103,6 +103,16 @@ class ResumptionDataProcessor : public app_mngr::event_engine::EventObserver {
 
  private:
   /**
+   * @brief Processes response message from HMI
+   * @param response reference to response message
+   * @param function_id function id of response
+   * @param corr_id correlation id of response
+   */
+  void ProcessResponseFromHMI(const smart_objects::SmartObject& response,
+                              const hmi_apis::FunctionID::eType function_id,
+                              const int32_t corr_id);
+
+  /**
    * @brief Revert the data to the state before Resumption
    * @param shared ptr to application
    */
@@ -116,19 +126,19 @@ class ResumptionDataProcessor : public app_mngr::event_engine::EventObserver {
   void WaitForResponse(const int32_t app_id, const ResumptionRequest& request);
 
   /**
-   * @brief Process specified HMI request
-   * @param request Request to process
-   * @param use_events Process request events or not flag
+   * @brief Process specified HMI message
+   * @param request Message to process
+   * @param use_events flag to specify should message events be processed or not
    * @return TRUE on success, otherwise FALSE
    */
-  void ProcessHMIRequest(smart_objects::SmartObjectSPtr request,
-                         bool subscribe_on_response);
+  void ProcessMessageToHMI(smart_objects::SmartObjectSPtr request,
+                           bool subscribe_on_response);
 
   /**
-   * @brief Process list of HMI requests using ProcessHMIRequest method
-   * @param requests List of requests to process
+   * @brief Process list of HMI messages using ProcessHMIRequest method
+   * @param messages List of messages to process
    */
-  void ProcessHMIRequests(const smart_objects::SmartObjectList& requests);
+  void ProcessMessagesToHMI(const smart_objects::SmartObjectList& messages);
 
   /**
    * @brief AddFiles allows to add files for the application
@@ -138,6 +148,14 @@ class ResumptionDataProcessor : public app_mngr::event_engine::EventObserver {
    */
   void AddFiles(app_mngr::ApplicationSharedPtr application,
                 const smart_objects::SmartObject& saved_app);
+
+  /**
+   * @brief AddWindows allows to add widget windows for the application
+   * @param application application which will be resumed
+   * @param saved_app application specific section from backup file
+   */
+  void AddWindows(app_mngr::ApplicationSharedPtr application,
+                  const smart_objects::SmartObject& saved_app);
 
   /**
    * @brief Deleting files that have been resumed
@@ -253,6 +271,12 @@ class ResumptionDataProcessor : public app_mngr::event_engine::EventObserver {
   void DeleteWayPointsSubscription(app_mngr::ApplicationSharedPtr application);
 
   /**
+   * @brief Deletting subscription for CreateWindow have been resumed
+   * @param shared ptr to application
+   */
+  void DeleteWindowsSubscriptions(app_mngr::ApplicationSharedPtr application);
+
+  /**
    * @brief Get button subscriptions that need to be resumed.
    * Since some subscriptions can be set by default during
    * app registration, this function is needed to discard subscriptions
@@ -263,15 +287,25 @@ class ResumptionDataProcessor : public app_mngr::event_engine::EventObserver {
       app_mngr::ApplicationSharedPtr application) const;
 
   /**
-   * @brief Determines whether request is successful
+   * @brief Determines whether response is successful
    * judging from result code received from HMI
    * @param response from HMI with request's result code
    */
-  bool IsRequestSuccessful(const smart_objects::SmartObject& response) const;
+  bool IsResponseSuccessful(const smart_objects::SmartObject& response) const;
 
   void CheckVehicleDataResponse(const smart_objects::SmartObject& request,
                                 const smart_objects::SmartObject& response,
                                 ApplicationResumptionStatus& status);
+
+  /**
+   * @brief Checks whether CreateWindow response successful or not and handles
+   * it
+   * @param request reference to request SO
+   * @param response reference to response SO
+   */
+  void CheckCreateWindowResponse(
+      const smart_objects::SmartObject& request,
+      const smart_objects::SmartObject& response) const;
 
   /**
    * @brief Determines whether application has saved data, including
