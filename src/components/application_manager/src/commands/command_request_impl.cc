@@ -265,9 +265,5 @@ void CommandRequestImpl::set_current_state(
   current_state_ = state;
 }
 
-#ifdef __QNX__
-void CommandRequestImpl::OnHMIMessageSent() {}
-#endif  // __QNX__
-
 }  // namespace commands
 }  // namespace application_manager
