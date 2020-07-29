@@ -92,6 +92,11 @@ void SystemCapabilityAppExtension::ProcessResumption(
 void SystemCapabilityAppExtension::RevertResumption(
     const smart_objects::SmartObject& subscriptions) {
   UNUSED(subscriptions);
+  for (auto subscription : subscribed_data_) {
+    if (SystemCapabilityType::DISPLAYS != subscription) {
+      UnsubscribeFrom(subscription);
+    }
+  }
 }
 
 SystemCapabilityAppExtension& SystemCapabilityAppExtension::ExtractExtension(

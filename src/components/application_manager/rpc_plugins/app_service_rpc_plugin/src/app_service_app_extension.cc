@@ -121,6 +121,7 @@ void AppServiceAppExtension::ProcessResumption(
 void AppServiceAppExtension::RevertResumption(
     const smart_objects::SmartObject& subscriptions) {
   UNUSED(subscriptions);
+  UnsubscribeFromAppService();
 }
 
 AppServiceAppExtension& AppServiceAppExtension::ExtractASExtension(
