@@ -118,11 +118,12 @@ void SDLRPCPlugin::ProcessResumptionSubscription(
   LOG4CXX_AUTO_TRACE(logger_);
   application_manager::ApplicationSharedPtr application =
       application_manager_->application(app.app_id());
-  std::set<uint32_t> apps =
-      application_manager_->GetAppsSubscribedForWayPoints();
+
+  if (!application_manager_->IsAnyAppSubscribedForWayPoints()) {
+    pending_resumption_handler_->HandleResumptionSubscriptionRequest(
+        ext, subscriber, app);
+  }
   application_manager_->SubscribeAppForWayPoints(application);
-  pending_resumption_handler_->HandleResumptionSubscriptionRequest(
-      ext, subscriber, app);
 }
 
 void SDLRPCPlugin::SaveResumptionData(
