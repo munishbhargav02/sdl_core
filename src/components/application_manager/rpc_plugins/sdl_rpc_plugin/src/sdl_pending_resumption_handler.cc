@@ -137,7 +137,7 @@ void SDLPendingResumptionHandler::on_event(
       LOG4CXX_ERROR(logger_, "Application NOT found");
       return;
     }
-    application_manager_.UnsubscribeAppFromWayPoints(app);
+    
     if (freezed_resumptions_.empty()) {
       LOG4CXX_DEBUG(logger_, "freezed resumptions is empty");
       return;
