@@ -2,6 +2,8 @@
 
 #include "application_manager/event_engine/event_observer.h"
 #include "application_manager/resumption/extension_pending_resumption_handler.h"
+#include "rc_rpc_plugin/rc_app_extension.h"
+#include "application_manager/rpc_service.h"
 
 namespace rc_rpc_plugin {
 
@@ -19,6 +21,12 @@ class RCPendingResumptionHandler
   void HandleResumptionSubscriptionRequest(application_manager::AppExtension& extension,
                                            resumption::Subscriber& subscriber, application_manager::Application& app) override;
   void ClearPendingResumptionRequests() override;
+
+private:
+
+  bool IsPending(const ModuleUid subscription) const ;
+  std::vector<ModuleUid> pending_subscriptions_;
+  application_manager::rpc_service::RPCService& rpc_service_;
 };
 
 }  // namespace rc_rpc_plugin
