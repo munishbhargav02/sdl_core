@@ -119,10 +119,8 @@ void SDLRPCPlugin::ProcessResumptionSubscription(
   application_manager::ApplicationSharedPtr application =
       application_manager_->application(app.app_id());
 
-  if (!application_manager_->IsAnyAppSubscribedForWayPoints()) {
-    pending_resumption_handler_->HandleResumptionSubscriptionRequest(
-        ext, subscriber, app);
-  }
+  pending_resumption_handler_->HandleResumptionSubscriptionRequest(
+      ext, subscriber, app);
   application_manager_->SubscribeAppForWayPoints(application);
 }
 
