@@ -42,7 +42,7 @@ CREATE_LOGGERPTR_GLOBAL(logger_, "DisplayCapabilitiesBuilder")
 const WindowID kDefaultWindowID = 0;
 
 DisplayCapabilitiesBuilder::DisplayCapabilitiesBuilder(Application& application)
-    : owner_(application) {
+    : owner_(application), is_widget_windows_resumption_(false) {
   LOG4CXX_AUTO_TRACE(logger_);
 }
 
@@ -53,6 +53,8 @@ void DisplayCapabilitiesBuilder::InitBuilder(
   sync_primitives::AutoLock lock(display_capabilities_lock_);
   resume_callback_ = resume_callback;
   window_ids_to_resume_.insert(kDefaultWindowID);
+  is_widget_windows_resumption_ = !windows_info.empty();
+
   for (size_t i = 0; i < windows_info.length(); ++i) {
     auto window_id = windows_info[i][strings::window_id].asInt();
     LOG4CXX_DEBUG(logger_,
@@ -100,6 +102,10 @@ const smart_objects::SmartObjectSPtr
 DisplayCapabilitiesBuilder::display_capabilities() const {
   LOG4CXX_AUTO_TRACE(logger_);
   return display_capabilities_;
+}
+
+bool DisplayCapabilitiesBuilder::is_window_resumption_needed() const {
+  return is_widget_windows_resumption_;
 }
 
 void DisplayCapabilitiesBuilder::InvokeCallbackFunction() {
@@ -181,8 +187,7 @@ void DisplayCapabilitiesBuilder::StopWaitingForWindow(
     const WindowID window_id) {
   LOG4CXX_AUTO_TRACE(logger_);
   sync_primitives::AutoLock lock(display_capabilities_lock_);
-  LOG4CXX_DEBUG(logger_,
-                "Window id " << window_id << " will be erased due to failure");
+  LOG4CXX_DEBUG(logger_, "Window id " << window_id << " will be erased");
   window_ids_to_resume_.erase(window_id);
 
   InvokeCallbackFunction();

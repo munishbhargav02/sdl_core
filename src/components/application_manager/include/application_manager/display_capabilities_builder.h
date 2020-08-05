@@ -94,6 +94,14 @@ class DisplayCapabilitiesBuilder {
    */
   const smart_objects::SmartObjectSPtr display_capabilities() const;
 
+  /**
+   * @brief is_window_resumption_needed checks that is there a need for
+   * resumption of windows (except main window)
+   * @return true if data about windows to be resumed was saved in window_info,
+   * otherwise returns false
+   */
+  bool is_window_resumption_needed() const;
+
  private:
   /**
    * @brief InvokeCallbackFunction invokes callback function if all required
@@ -107,6 +115,7 @@ class DisplayCapabilitiesBuilder {
   Application& owner_;
   ResumeCallback resume_callback_;
   sync_primitives::Lock display_capabilities_lock_;
+  bool is_widget_windows_resumption_;
 };
 }  // namespace application_manager
 #endif
