@@ -40,14 +40,6 @@ class RCPendingResumptionHandlerTest : public ::testing::Test {
 };
 
 
-TEST_F(RCPendingResumptionHandler,
-       HandleResumptionNosubscriptions) {
-  // Create extension with no rc modules
-  // call HandleResumptionSubscriptionRequest
-  // expect no HMI calls , no subscriptions
-}
-
-
 
 TEST_F(RCPendingResumptionHandler,
        HandleResumptionNosubscriptions) {
@@ -79,7 +71,6 @@ TEST_F(RCPendingResumptionHandler,
   // Create extension2 with the same module as in extension1
   // call HandleResumptionSubscriptionRequest for extension2
   // EXPECT no HMI call, expect subscription
-
 }
 
 TEST_F(RCPendingResumptionHandler,
@@ -93,6 +84,40 @@ TEST_F(RCPendingResumptionHandler,
   // EXPECT HMI call for new module
   // EXPECT no HMI call for first module
   // expect subscription for both modules
+}
+
+TEST_F(RCPendingResumptionHandler,
+       Resumption2ApplicationsWithCommonDataSuccess) {
+  // Create extension1 with one module1
+  // call HandleResumptionSubscriptionRequest
+  // ASSERR one HMI call , assert subscription
+  // Create extension2 with the same module1 as in extension1
+  // call HandleResumptionSubscriptionRequest for extension2
+  // assert creating HMI message for module1 app2
+  // assert subscription for module1
+  // assert no HMI call for module1
+
+
+  // call on_event with succesfull response to module1
+  // expect raizing event with succesfull response to module1 for app2
+}
+
+
+
+TEST_F(RCPendingResumptionHandler,
+       Resumption2ApplicationsWithCommonDataFailedRetry) {
+  // Create extension1 with one module1
+  // call HandleResumptionSubscriptionRequest
+  // ASSERR one HMI call , assert subscription
+  // Create extension2 with the same module1 as in extension1
+  // call HandleResumptionSubscriptionRequest for extension2
+  // assert creating HMI message for module1 app2
+  // assert subscription for module1
+  // assert no HMI call for module1
+
+
+  // call on_event with unsuccessful response to module1
+  // Expect HMI request with module1 subscription
 }
 
 }  // namespace rc_rpc_plugin_test

@@ -15,14 +15,17 @@ namespace rc_rpc_plugin {
 class RCPendingResumptionHandler
     : public resumption::ExtensionPendingResumptionHandler {
 
-
+  RCPendingResumptionHandler(application_manager::ApplicationManager& application_manager);
   void on_event(const application_manager::event_engine::Event& event) override;
 
   void HandleResumptionSubscriptionRequest(application_manager::AppExtension& extension,
-                                           resumption::Subscriber& subscriber, application_manager::Application& app) override;
+                                           resumption::Subscriber& subscriber,
+                                           application_manager::Application& app) override;
   void ClearPendingResumptionRequests() override;
 
 private:
+
+  void CreateSubscriptionMessage();
 
   bool IsPending(const ModuleUid subscription) const ;
   std::vector<ModuleUid> pending_subscriptions_;
