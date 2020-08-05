@@ -349,7 +349,12 @@ void ResumptionDataProcessor::HandleOnTimeOut(
 
 void ResumptionDataProcessor::on_event(const event_engine::Event& event) {
   LOG4CXX_AUTO_TRACE(logger_);
-  LOG4CXX_DEBUG(logger_, "Handling response message from HMI");
+  LOG4CXX_DEBUG(
+      logger_,
+      "AKutsan Handling response message from HMI "
+          << event.id() << " "
+          << event.smart_object()[strings::params][strings::correlation_id]
+                 .asInt());
   ProcessResponseFromHMI(
       event.smart_object(), event.id(), event.smart_object_correlation_id());
 }
@@ -398,9 +403,9 @@ void ResumptionDataProcessor::WaitForResponse(
     const int32_t app_id, const ResumptionRequest& request) {
   LOG4CXX_AUTO_TRACE(logger_);
   LOG4CXX_DEBUG(logger_,
-                "App " << app_id << " subscribe on "
-                       << request.request_ids.function_id << " "
-                       << request.request_ids.correlation_id);
+                "AKutsan App " << app_id << " subscribe on "
+                               << request.request_ids.function_id << " "
+                               << request.request_ids.correlation_id);
   subscribe_on_event(request.request_ids.function_id,
                      request.request_ids.correlation_id);
 
