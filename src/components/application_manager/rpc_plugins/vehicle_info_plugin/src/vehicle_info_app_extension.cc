@@ -85,6 +85,21 @@ const VehicleInfoSubscriptions& VehicleInfoAppExtension::Subscriptions() {
   return subscribed_data_;
 }
 
+bool VehicleInfoAppExtension::AddPendingSubscription(
+    const std::string& vehicle_data) {
+  return pending_subscriptions_.insert(vehicle_data).second;
+}
+
+bool VehicleInfoAppExtension::RemovePendingSubscriptions() {
+  pending_subscriptions_.clear();
+  return true;
+}
+
+const VehicleInfoSubscriptions&
+VehicleInfoAppExtension::PendingSubscriptions() {
+  return pending_subscriptions_;
+}
+
 void VehicleInfoAppExtension::SaveResumptionData(
     smart_objects::SmartObject& resumption_data) {
   resumption_data[strings::application_vehicle_info] =
@@ -115,7 +130,7 @@ void VehicleInfoAppExtension::ProcessResumption(
   const smart_objects::SmartObject& subscriptions_ivi =
       resumption_data[strings::application_vehicle_info];
   for (size_t i = 0; i < subscriptions_ivi.length(); ++i) {
-    subscribeToVehicleInfo(subscriptions_ivi[i].asString());
+    AddPendingSubscription(subscriptions_ivi[i].asString());
   }
   if (subscriptions_ivi.length() > 0) {
     plugin_.ProcessResumptionSubscription(app_, *this, subscriber);
