@@ -48,8 +48,6 @@ namespace rc_rpc_plugin {
 namespace plugins = application_manager::plugin_manager;
 namespace app_mngr = application_manager;
 
-class Logger;
-
 class RCRPCPlugin : public plugins::RPCPlugin {
  public:
   /**
