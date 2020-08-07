@@ -193,6 +193,13 @@ void VehicleInfoPendingResumptionHandler::TriggerPendingResumption() {
     return;
   }
   auto& next_pending = pending_requests_.front();
+  if (next_pending.waiting_for_hmi_response_) {
+    LOG4CXX_DEBUG(logger_,
+                  "Pending resumption for  "
+                      << next_pending.app_id_
+                      << " is already waiting for HMI response");
+    return;
+  }
   SendHMIRequestForNotSubscribed(next_pending);
   next_pending.waiting_for_hmi_response_ = true;
 }
@@ -254,6 +261,7 @@ void VehicleInfoPendingResumptionHandler::HandleResumptionSubscriptionRequest(
     application_manager::Application& app) {
   LOG4CXX_AUTO_TRACE(logger_);
   sync_primitives::AutoLock lock(lock_);
+  LOG4CXX_TRACE(logger_, "app id " << app.app_id());
   UNUSED(extension);
   auto& ext = VehicleInfoAppExtension::ExtractVIExtension(app);
 
@@ -262,6 +270,8 @@ void VehicleInfoPendingResumptionHandler::HandleResumptionSubscriptionRequest(
     LOG4CXX_DEBUG(logger_, "Subscriptions is empty");
     return;
   }
+  LOG4CXX_TRACE(logger_,
+                "resume subscriptions to : " << Stringify(subscriptions));
   auto pending_request =
       SubscribeToFakeRequest(app.app_id(), subscriptions, subscriber);
 
