@@ -167,12 +167,18 @@ void VehicleInfoPendingResumptionHandler::ProcessNextPendingResumption(
     return;
   }
   auto& pending = pending_requests_.front();
+  if (pending.waiting_for_hmi_response_) {
+    LOG4CXX_DEBUG(logger_,
+                  "Requests was already sent to HMI for " << pending.app_id_);
+    return;
+  }
   const auto successful_subscriptions =
       SuccessfulSubscriptionsFromResponse(response_message);
   pending.FillRestoredData(successful_subscriptions);
 
   if (!pending.Successfull()) {
     SendHMIRequestForNotSubscribed(pending);
+    pending.waiting_for_hmi_response_ = true;
     return;
   }
   auto copy = pending;
@@ -186,8 +192,9 @@ void VehicleInfoPendingResumptionHandler::TriggerPendingResumption() {
   if (pending_requests_.empty()) {
     return;
   }
-  auto next_pending = pending_requests_.front();
+  auto& next_pending = pending_requests_.front();
   SendHMIRequestForNotSubscribed(next_pending);
+  next_pending.waiting_for_hmi_response_ = true;
 }
 
 void VehicleInfoPendingResumptionHandler::on_event(
@@ -381,7 +388,7 @@ void VehicleInfoPendingResumptionHandler::PendingSubscriptionsResumption::
 
   FillRestoredData(successful_subscriptions);
 
-  LOG4CXX_DEBUG(logger_, "Restored data" << Stringify(restored_vehicle_data_));
+  LOG4CXX_DEBUG(logger_, "Restored data " << Stringify(restored_vehicle_data_));
 
   FillSubscriptionResults();
 
