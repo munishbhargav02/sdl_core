@@ -44,6 +44,8 @@ VehicleInfoAppExtension::VehicleInfoAppExtension(
     VehicleInfoPlugin& plugin, application_manager::Application& app)
     : app_mngr::AppExtension(
           VehicleInfoAppExtension::VehicleInfoAppExtensionUID)
+    , subscribed_data_lock_(std::make_shared<sync_primitives::Lock>())
+    , pending_subscriptions_lock_(std::make_shared<sync_primitives::Lock>())
     , plugin_(plugin)
     , app_(app) {
   LOG4CXX_AUTO_TRACE(logger_);
@@ -56,12 +58,14 @@ VehicleInfoAppExtension::~VehicleInfoAppExtension() {
 bool VehicleInfoAppExtension::subscribeToVehicleInfo(
     const std::string& vehicle_data) {
   LOG4CXX_DEBUG(logger_, vehicle_data);
+  sync_primitives::AutoLock lock(*subscribed_data_lock_);
   return subscribed_data_.insert(vehicle_data).second;
 }
 
 bool VehicleInfoAppExtension::unsubscribeFromVehicleInfo(
     const std::string& vehicle_data) {
   LOG4CXX_DEBUG(logger_, vehicle_data);
+  sync_primitives::AutoLock lock(*subscribed_data_lock_);
   auto it = subscribed_data_.find(vehicle_data);
   if (it != subscribed_data_.end()) {
     subscribed_data_.erase(it);
@@ -72,17 +76,51 @@ bool VehicleInfoAppExtension::unsubscribeFromVehicleInfo(
 
 void VehicleInfoAppExtension::unsubscribeFromVehicleInfo() {
   LOG4CXX_AUTO_TRACE(logger_);
+  sync_primitives::AutoLock lock(*subscribed_data_lock_);
   subscribed_data_.clear();
 }
 
 bool VehicleInfoAppExtension::isSubscribedToVehicleInfo(
     const std::string& vehicle_data) const {
   LOG4CXX_DEBUG(logger_, vehicle_data);
+  sync_primitives::AutoLock lock(*subscribed_data_lock_);
   return subscribed_data_.find(vehicle_data) != subscribed_data_.end();
 }
 
-const VehicleInfoSubscriptions& VehicleInfoAppExtension::Subscriptions() {
-  return subscribed_data_;
+const DataAccessor<VehicleInfoSubscriptions>
+VehicleInfoAppExtension::Subscriptions() {
+  DataAccessor<VehicleInfoSubscriptions> data_accessor(subscribed_data_,
+                                                       subscribed_data_lock_);
+  return data_accessor;
+}
+
+bool VehicleInfoAppExtension::AddPendingSubscription(
+    const std::string& vehicle_data) {
+  sync_primitives::AutoLock lock(*pending_subscriptions_lock_);
+  return pending_subscriptions_.insert(vehicle_data).second;
+}
+
+bool VehicleInfoAppExtension::RemovePendingSubscription(
+    const std::string& vehicle_data) {
+  LOG4CXX_DEBUG(logger_, vehicle_data);
+  sync_primitives::AutoLock lock(*pending_subscriptions_lock_);
+  auto it = pending_subscriptions_.find(vehicle_data);
+  if (it != pending_subscriptions_.end()) {
+    pending_subscriptions_.erase(it);
+    return true;
+  }
+  return false;
+}
+
+void VehicleInfoAppExtension::RemovePendingSubscriptions() {
+  sync_primitives::AutoLock lock(*pending_subscriptions_lock_);
+  pending_subscriptions_.clear();
+}
+
+const DataAccessor<VehicleInfoSubscriptions>
+VehicleInfoAppExtension::PendingSubscriptions() {
+  return DataAccessor<VehicleInfoSubscriptions>(pending_subscriptions_,
+                                                pending_subscriptions_lock_);
 }
 
 void VehicleInfoAppExtension::SaveResumptionData(
@@ -90,6 +128,7 @@ void VehicleInfoAppExtension::SaveResumptionData(
   resumption_data[strings::application_vehicle_info] =
       smart_objects::SmartObject(smart_objects::SmartType_Array);
   int i = 0;
+  sync_primitives::AutoLock lock(*subscribed_data_lock_);
   for (const auto& subscription : subscribed_data_) {
     resumption_data[strings::application_vehicle_info][i++] = subscription;
   }
@@ -115,7 +154,7 @@ void VehicleInfoAppExtension::ProcessResumption(
   const smart_objects::SmartObject& subscriptions_ivi =
       resumption_data[strings::application_vehicle_info];
   for (size_t i = 0; i < subscriptions_ivi.length(); ++i) {
-    subscribeToVehicleInfo(subscriptions_ivi[i].asString());
+    AddPendingSubscription(subscriptions_ivi[i].asString());
   }
   if (subscriptions_ivi.length() > 0) {
     plugin_.ProcessResumptionSubscription(app_, *this, subscriber);

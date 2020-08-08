@@ -58,6 +58,8 @@ class VehicleInfoAppExtension : public app_mngr::AppExtension {
    */
   VehicleInfoAppExtension(VehicleInfoPlugin& plugin,
                           app_mngr::Application& app);
+  VehicleInfoAppExtension(const VehicleInfoAppExtension&) = delete;
+  VehicleInfoAppExtension& operator=(const VehicleInfoAppExtension&) = delete;
   virtual ~VehicleInfoAppExtension();
 
   /**
@@ -93,7 +95,37 @@ class VehicleInfoAppExtension : public app_mngr::AppExtension {
    * @brief Subscriptions get list of subscriptions for application extension
    * @return list of subscriptions for application extension
    */
-  const VehicleInfoSubscriptions& Subscriptions();
+  const DataAccessor<VehicleInfoSubscriptions> Subscriptions();
+
+  /**
+   * @brief AddPendingSubscription add pending subscription
+   * @param vehicle_data subscription to add
+   * @return
+   */
+  bool AddPendingSubscription(const std::string& vehicle_data);
+
+  /**
+   * @brief RemovePendingSubscription remove some paticular pending subscription
+   * @param vehicle_data subscription to remove
+   * @return
+   */
+  bool RemovePendingSubscription(const std::string& vehicle_data);
+
+  /**
+   * @brief RemovePendingSubscriptions removed all pending subscriptions
+   * @return
+   */
+  void RemovePendingSubscriptions();
+
+  /**
+   * @brief PendingSubscriptions list of preliminary subscriptoins
+   * That will be moved to subscriptions as soon as HMI will respond with
+   * success.
+   * Used for resumption to keep list of preliminary subcriptions and wait for
+   * HMI response
+   * @return
+   */
+  const DataAccessor<VehicleInfoSubscriptions> PendingSubscriptions();
 
   /**
    * @brief SaveResumptionData saves vehicle info data
@@ -133,7 +165,11 @@ class VehicleInfoAppExtension : public app_mngr::AppExtension {
       application_manager::Application& app);
 
  private:
+  mutable std::shared_ptr<sync_primitives::Lock> subscribed_data_lock_;
   VehicleInfoSubscriptions subscribed_data_;
+
+  mutable std::shared_ptr<sync_primitives::Lock> pending_subscriptions_lock_;
+  VehicleInfoSubscriptions pending_subscriptions_;
   VehicleInfoPlugin& plugin_;
   app_mngr::Application& app_;
 };

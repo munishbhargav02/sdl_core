@@ -59,10 +59,11 @@ bool VehicleInfoPlugin::Init(
     resumption::LastStateWrapperPtr last_state) {
   UNUSED(last_state);
   application_manager_ = &app_manager;
-  pending_resumption_handler_ =
-      std::make_shared<VehicleInfoPendingResumptionHandler>(app_manager);
   custom_vehicle_data_manager_.reset(
       new CustomVehicleDataManagerImpl(policy_handler, rpc_service));
+  pending_resumption_handler_ =
+      std::make_shared<VehicleInfoPendingResumptionHandler>(
+          app_manager, *custom_vehicle_data_manager_);
   command_factory_.reset(new vehicle_info_plugin::VehicleInfoCommandFactory(
       app_manager,
       rpc_service,
@@ -131,7 +132,7 @@ void VehicleInfoPlugin::UnsubscribeFromRemovedVDItems() {
     auto applications = application_manager_->applications();
     for (auto& app : applications.GetData()) {
       auto& ext = VehicleInfoAppExtension::ExtractVIExtension(*app);
-      auto subscription_names = ext.Subscriptions();
+      auto subscription_names = ext.Subscriptions().GetData();
       for (auto& subscription_name : subscription_names) {
         if (custom_vehicle_data_manager_->IsRemovedCustomVehicleDataName(
                 subscription_name)) {
@@ -166,6 +167,13 @@ void VehicleInfoPlugin::ProcessResumptionSubscription(
     resumption::Subscriber subscriber) {
   LOG4CXX_AUTO_TRACE(logger_);
 
+  auto pending = ext.PendingSubscriptions().GetData();
+  for (const auto& ivi : pending) {
+    if (IsSubscribedAppExist(ivi)) {
+      ext.RemovePendingSubscription(ivi);
+      ext.subscribeToVehicleInfo(ivi);
+    }
+  }
   pending_resumption_handler_->HandleResumptionSubscriptionRequest(
       ext, subscriber, app);
 }
@@ -306,7 +314,7 @@ smart_objects::SmartObjectSPtr VehicleInfoPlugin::GetUnsubscribeIVIRequest(
 void VehicleInfoPlugin::DeleteSubscriptions(
     application_manager::ApplicationSharedPtr app) {
   auto& ext = VehicleInfoAppExtension::ExtractVIExtension(*app);
-  auto subscriptions = ext.Subscriptions();
+  auto subscriptions = ext.Subscriptions().GetData();
   std::vector<std::string> ivi_to_unsubscribe;
   for (auto& ivi : subscriptions) {
     ext.unsubscribeFromVehicleInfo(ivi);
