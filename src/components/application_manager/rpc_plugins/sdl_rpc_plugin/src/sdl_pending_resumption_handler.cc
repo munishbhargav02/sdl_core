@@ -26,6 +26,7 @@
  */
 
 #include "sdl_rpc_plugin/sdl_pending_resumption_handler.h"
+#include "application_manager/event_engine/event.h"
 #include "application_manager/event_engine/event_observer.h"
 #include "application_manager/message_helper.h"
 #include "application_manager/resumption/resumption_data_processor.h"
@@ -33,7 +34,7 @@
 
 namespace sdl_rpc_plugin {
 
-CREATE_LOGGERPTR_GLOBAL(logger_, "VehicleInfoPendingResumptionHandler")
+CREATE_LOGGERPTR_GLOBAL(logger_, "SdlRPCPlugin")
 
 SDLPendingResumptionHandler::SDLPendingResumptionHandler(
     application_manager::ApplicationManager& application_manager)
@@ -60,6 +61,10 @@ void SDLPendingResumptionHandler::ClearPendingRequestsMap() {
         static_cast<hmi_apis::FunctionID::eType>(
             it.second[strings::params][strings::function_id].asInt());
     unsubscribe_from_event(timed_out_pending_request_fid);
+    if (!app_ids_.empty()) {
+      auto app_id = app_ids_.front();
+      app_ids_.pop();
+    }
   }
 
   pending_requests_.clear();
@@ -71,19 +76,16 @@ void SDLPendingResumptionHandler::ClearPendingResumptionRequests() {
   ClearPendingRequestsMap();
 
   if (!freezed_resumptions_.empty()) {
-    ResumptionAwaitingHandling freezed_resumption =
-        freezed_resumptions_.front();
-    freezed_resumptions_.pop();
+    ResumptionAwaitingHandling freezed_resumption = freezed_resumptions_.back();
+    freezed_resumptions_.pop_back();
 
-    auto request = CreateSubscriptionRequest();
+    auto request = std::make_shared<smart_objects::SmartObject>(
+        freezed_resumption.request_to_send_.message);
     const uint32_t cid =
         (*request)[strings::params][strings::correlation_id].asUInt();
     const hmi_apis::FunctionID::eType fid =
         static_cast<hmi_apis::FunctionID::eType>(
             (*request)[strings::params][strings::function_id].asInt());
-    auto resumption_req = MakeResumptionRequest(cid, fid, *request);
-    auto subscriber = freezed_resumption.subscriber;
-    subscriber(freezed_resumption.app_id, resumption_req);
     LOG4CXX_DEBUG(logger_,
                   "Subscribing for event with function id: "
                       << fid << " correlation id: " << cid);
@@ -93,6 +95,18 @@ void SDLPendingResumptionHandler::ClearPendingResumptionRequests() {
                   "Sending request with fid: " << fid << " and cid: " << cid);
     application_manager_.GetRPCService().ManageHMICommand(request);
   }
+}
+
+void SDLPendingResumptionHandler::RaiseFakeSuccessfulResponse(
+    ns_smart_device_link::ns_smart_objects::SmartObject response,
+    int32_t corr_id) {
+  using namespace application_manager;
+  response[strings::params][strings::correlation_id] = corr_id;
+  auto fid = static_cast<hmi_apis::FunctionID::eType>(
+      response[strings::params][strings::function_id].asInt());
+  event_engine::Event event(fid);
+  event.set_smart_object(response);
+  event.raise(application_manager_.event_dispatcher());
 }
 
 void SDLPendingResumptionHandler::on_event(
@@ -110,6 +124,17 @@ void SDLPendingResumptionHandler::on_event(
   }
   pending_request = pending_requests_[corr_id];
   pending_requests_.erase(corr_id);
+  if (app_ids_.empty()) {
+    LOG4CXX_ERROR(logger_, "app_ids is empty");
+    return;
+  }
+  uint32_t app_id = app_ids_.front();
+  app_ids_.pop();
+  auto app = application_manager_.application(app_id);
+  if (!app) {
+    LOG4CXX_ERROR(logger_, "Application NOT found");
+    return;
+  }
 
   LOG4CXX_DEBUG(logger_,
                 "Received event with function id: "
@@ -122,41 +147,43 @@ void SDLPendingResumptionHandler::on_event(
   const bool succesfull_response =
       (result_code == hmi_apis::Common_Result::SUCCESS ||
        result_code == hmi_apis::Common_Result::WARNINGS);
+
   if (succesfull_response) {
     LOG4CXX_DEBUG(logger_, "Resumption of subscriptions is successful");
+
+    application_manager_.SubscribeAppForWayPoints(app);
+
+    unsubscribe_from_event(event.id());
+
+    for (auto& freezed_resumption : freezed_resumptions_) {
+      auto corr_id = freezed_resumption.request_to_send_
+                         .message[strings::params][strings::correlation_id]
+                         .asInt();
+      RaiseFakeSuccessfulResponse(response, corr_id);
+      application_manager_.SubscribeAppForWayPoints(freezed_resumption.app_id);
+    }
+    freezed_resumptions_.clear();
   } else {
     LOG4CXX_DEBUG(logger_, "Resumption of subscriptions is NOT successful");
-    uint32_t app_id = 0;
-    if (app_ids_.empty()) {
-      LOG4CXX_ERROR(logger_, "app_ids is empty");
-      return;
-    }
-    app_id = app_ids_.front();
-    auto app = application_manager_.application(app_id);
-    if (!app) {
-      LOG4CXX_ERROR(logger_, "Application NOT found");
-      return;
-    }
-    application_manager_.UnsubscribeAppFromWayPoints(app);
+
     if (freezed_resumptions_.empty()) {
       LOG4CXX_DEBUG(logger_, "freezed resumptions is empty");
       return;
     }
 
-    ResumptionAwaitingHandling freezed_resumption =
-        freezed_resumptions_.front();
-    freezed_resumptions_.pop();
-    resumption::Subscriber subscriber = freezed_resumption.subscriber;
-
-    auto request = CreateSubscriptionRequest();
+    ResumptionAwaitingHandling freezed_resumption = freezed_resumptions_.back();
+    freezed_resumptions_.pop_back();
+    auto resumption_req = freezed_resumption.request_to_send_;
     const uint32_t cid =
-        (*request)[strings::params][strings::correlation_id].asUInt();
+        resumption_req.message[strings::params][strings::correlation_id]
+            .asInt();
     const hmi_apis::FunctionID::eType fid =
         static_cast<hmi_apis::FunctionID::eType>(
-            (*request)[strings::params][strings::function_id].asInt());
-    auto resumption_req = MakeResumptionRequest(cid, fid, *request);
+            resumption_req.message[strings::params][strings::function_id]
+                .asInt());
     subscribe_on_event(fid, cid);
-    subscriber(freezed_resumption.app_id, resumption_req);
+    auto request =
+        std::make_shared<smart_objects::SmartObject>(resumption_req.message);
     LOG4CXX_DEBUG(logger_,
                   "Subscribing for event with function id: "
                       << fid << " correlation id: " << cid);
@@ -187,21 +214,23 @@ void SDLPendingResumptionHandler::HandleResumptionSubscriptionRequest(
   auto resumption_request =
       MakeResumptionRequest(corr_id, function_id, *request);
   app_ids_.push(app.app_id());
+  subscriber(app.app_id(), resumption_request);
   if (pending_requests_.empty()) {
     LOG4CXX_DEBUG(logger_,
                   "There are no pending requests for app_id: " << app.app_id());
     pending_requests_[corr_id] = request_ref;
     subscribe_on_event(function_id, corr_id);
-    subscriber(app.app_id(), resumption_request);
     LOG4CXX_DEBUG(logger_,
                   "Sending request with function id: "
                       << function_id << " and correlation_id: " << corr_id);
+
     application_manager_.GetRPCService().ManageHMICommand(request);
     return;
   }
   LOG4CXX_DEBUG(logger_,
                 "There are pending requests for app_id: " << app.app_id());
-  ResumptionAwaitingHandling frozen_res(app.app_id(), ext, subscriber);
-  freezed_resumptions_.push(frozen_res);
+  ResumptionAwaitingHandling frozen_res(
+      app.app_id(), ext, subscriber, resumption_request);
+  freezed_resumptions_.push_back(frozen_res);
 }
 }  // namespace sdl_rpc_plugin
