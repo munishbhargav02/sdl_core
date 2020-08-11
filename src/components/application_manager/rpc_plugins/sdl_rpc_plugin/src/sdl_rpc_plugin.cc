@@ -136,16 +136,14 @@ void SDLRPCPlugin::SaveResumptionData(
       application_manager_->IsAppSubscribedForWayPoints(app);
 }
 
-void SDLRPCPlugin::RevertResumption(application_manager::Application& app,
-                                    bool is_way_point_request_successful) {
+void SDLRPCPlugin::RevertResumption(application_manager::Application& app) {
   LOG4CXX_AUTO_TRACE(logger_);
 
   pending_resumption_handler_->ClearPendingResumptionRequests();
 
   if (application_manager_->IsAppSubscribedForWayPoints(app)) {
     application_manager_->UnsubscribeAppFromWayPoints(app.app_id());
-    if (!application_manager_->IsAnyAppSubscribedForWayPoints() &&
-        is_way_point_request_successful) {
+    if (!application_manager_->IsAnyAppSubscribedForWayPoints()) {
       LOG4CXX_DEBUG(logger_, "Send UnsubscribeWayPoints");
       auto request =
           application_manager::MessageHelper::CreateUnsubscribeWayPointsRequest(
