@@ -345,7 +345,8 @@ std::string MessageHelper::MobileLanguageToString(
 }
 
 smart_objects::SmartObjectSPtr MessageHelper::CreateMessageForHMI(
-    hmi_apis::messageType::eType message_type, const uint32_t correlation_id) {
+    const hmi_apis::messageType::eType message_type,
+    const uint32_t correlation_id) {
   using namespace smart_objects;
 
   SmartObjectSPtr message = std::make_shared<SmartObject>(SmartType_Map);
@@ -361,7 +362,8 @@ smart_objects::SmartObjectSPtr MessageHelper::CreateMessageForHMI(
 }
 
 smart_objects::SmartObjectSPtr MessageHelper::CreateMessageForHMI(
-    hmi_apis::FunctionID::eType function_id, const uint32_t correlation_id) {
+    const hmi_apis::FunctionID::eType function_id,
+    const uint32_t correlation_id) {
   using namespace smart_objects;
 
   SmartObjectSPtr message = std::make_shared<SmartObject>(SmartType_Map);

@@ -288,6 +288,10 @@ class MessageHelper {
 
   /**
    * @brief Sends button subscription notification
+   * @param app_id Application ID
+   * @param button Enum with button name
+   * @param is_subscribed true if subscribed, false otherwise
+   * @param app_mngr reference to application manager
    */
   static void SendOnButtonSubscriptionNotification(
       const uint32_t app_id,
@@ -297,8 +301,11 @@ class MessageHelper {
 
   /**
    * @brief Creates button subscription notification
+   * @param app_id Application ID
+   * @param button Enum with button name
+   * @param is_subscribed true if subscribed, false otherwise
+   * @return notification message in SmartObject format
    */
-
   static smart_objects::SmartObjectSPtr CreateOnButtonSubscriptionNotification(
       const uint32_t app_id,
       const hmi_apis::Common_ButtonName::eType button,
@@ -307,6 +314,8 @@ class MessageHelper {
   /**
    * @brief Sends button subscription notifications for all buttons
    * that application is subscribed on
+   * @param app shared pointer to application instance
+   * @param app_mngr reference to application manager
    */
   static void SendAllOnButtonSubscriptionNotificationsForApp(
       ApplicationConstSharedPtr app, ApplicationManager& app_mngr);
@@ -314,6 +323,10 @@ class MessageHelper {
   /**
    * @brief Creates button subscription notifications for buttons
    * that application is subscribed on
+   * @param app shared pointer to application instance
+   * @param app_mngr reference to application manager
+   * @param button_subscriptions collection of subscribed buttons
+   * @return list of notification messages in SmartObject format
    */
   static smart_objects::SmartObjectList
   CreateOnButtonSubscriptionNotificationsForApp(
@@ -1067,7 +1080,8 @@ class MessageHelper {
    * @return HMI message object with filled header
    */
   static smart_objects::SmartObjectSPtr CreateMessageForHMI(
-      hmi_apis::messageType::eType message_type, const uint32_t correlation_id);
+      const hmi_apis::messageType::eType message_type,
+      const uint32_t correlation_id);
 
   /**
    * @brief CreateMessageForHMI Creates HMI message with prepared header
@@ -1077,7 +1091,8 @@ class MessageHelper {
    * @return HMI message object with filled header
    */
   static smart_objects::SmartObjectSPtr CreateMessageForHMI(
-      hmi_apis::FunctionID::eType function_id, const uint32_t correlation_id);
+      const hmi_apis::FunctionID::eType function_id,
+      const uint32_t correlation_id);
 
   /**
    * @brief CreateUIResetGlobalPropertiesRequest Creates request
