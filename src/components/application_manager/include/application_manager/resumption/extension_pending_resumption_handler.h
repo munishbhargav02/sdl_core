@@ -40,6 +40,11 @@ namespace resumption {
 
 namespace app_mngr = application_manager;
 
+/**
+ * @brief The ExtensionPendingResumptionHandler class
+ * responsibility to avoid duplication of subscription requests to HMI
+ * if multiple applications are registering
+ */
 class ExtensionPendingResumptionHandler
     : public application_manager::event_engine::EventObserver {
  public:
@@ -52,6 +57,13 @@ class ExtensionPendingResumptionHandler
   virtual void on_event(
       const application_manager::event_engine::Event& event) = 0;
 
+  /**
+   * @brief HandleResumptionSubscriptionRequest handles all subscriptions
+   * requests, which might be send to HMI under certain conditions
+   * @param extension reference to corresponding application extension
+   * @param subscriber callback for subscribing
+   * @param app reference to application owner
+   */
   virtual void HandleResumptionSubscriptionRequest(
       app_mngr::AppExtension& extension,
       Subscriber& subscriber,
@@ -60,6 +72,13 @@ class ExtensionPendingResumptionHandler
   virtual void ClearPendingResumptionRequests() = 0;
 
  protected:
+  /**
+   * @brief MakeResumptionRequest creates resumption request
+   * @param corr_id correlation ID
+   * @param function_id function ID
+   * @param message Message to HMI
+   * @return instance of ResumptionRequest class
+   */
   virtual ResumptionRequest MakeResumptionRequest(
       const uint32_t corr_id,
       const hmi_apis::FunctionID::eType function_id,
