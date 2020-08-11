@@ -65,7 +65,7 @@ class ExtensionPendingResumptionHandler
       Subscriber& subscriber,
       application_manager::Application& app) = 0;
 
-  virtual void ClearPendingResumptionRequests() = 0;
+  virtual void OnResumptionRevert() = 0;
 
  protected:
   

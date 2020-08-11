@@ -57,7 +57,7 @@ class VehicleInfoPendingResumptionHandler
   void HandleResumptionSubscriptionRequest(app_mngr::AppExtension& extension,
                                            resumption::Subscriber& subscriber,
                                            app_mngr::Application& app) OVERRIDE;
-  void ClearPendingResumptionRequests() OVERRIDE;
+  void OnResumptionRevert() OVERRIDE;
 
   smart_objects::SmartObjectSPtr CreateSubscribeRequestToHMI(
       const VehicleDataList& subscriptions);

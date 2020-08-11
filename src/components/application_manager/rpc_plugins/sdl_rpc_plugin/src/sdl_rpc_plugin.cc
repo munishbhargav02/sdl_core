@@ -139,7 +139,7 @@ void SDLRPCPlugin::SaveResumptionData(
 void SDLRPCPlugin::RevertResumption(application_manager::Application& app) {
   LOG4CXX_AUTO_TRACE(logger_);
 
-  pending_resumption_handler_->ClearPendingResumptionRequests();
+  pending_resumption_handler_->OnResumptionRevert();
 
   if (application_manager_->IsAppSubscribedForWayPoints(app)) {
     application_manager_->UnsubscribeAppFromWayPoints(app.app_id());
