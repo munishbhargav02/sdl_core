@@ -88,7 +88,7 @@ void RCPendingResumptionHandler::HandleResumptionSubscriptionRequest(
     auto subscription_request = CreateSubscriptionRequest(subscription, cid);
     auto fid = GetFunctionId(subscription_request);
     auto resumption_request =
-        MakeResumptionRequest(cid, fid, subscription_request);
+        MakeResumptionRequest(cid, fid, *subscription_request);
     freezed_resumptions_[subscription].push(resumption_request);
     subscriber(app_id, resumption_request);
     LOG4CXX_DEBUG(logger_,
@@ -111,7 +111,7 @@ void RCPendingResumptionHandler::HandleResumptionSubscriptionRequest(
     auto subscription_request = CreateSubscriptionRequest(subscription, cid);
     auto fid = GetFunctionId(subscription_request);
     auto resumption_request =
-        MakeResumptionRequest(cid, fid, subscription_request);
+        MakeResumptionRequest(cid, fid, *subscription_request);
     pending_requests_.emplace(cid, *subscription_request);
     LOG4CXX_DEBUG(logger_,
                   "Subscribing for event with function id: "
@@ -152,7 +152,16 @@ void RCPendingResumptionHandler::ProcessSuccessfulResponse(
   auto& response = event.smart_object();
   auto cid = event.smart_object_correlation_id();
 
-  RaiseEvent4Response(response, cid);
+  // response[app_mngr::strings::params][app_mngr::strings::function_id] =
+  //     static_cast<int>(mobile_apis::FunctionID::eType::OnInteriorVehicleDataID);
+  // response[app_mngr::strings::params][app_mngr::strings::message_type] =
+  //     static_cast<int32_t>(app_mngr::MessageType::kNotification);
+
+  // application_manager_.GetRPCService().ManageMobileCommand(
+  //   std::make_shared<smart_objects::SmartObject>(response),
+  //   app_mngr::commands::Command::SOURCE_SDL);
+
+  // RaiseEvent4Response(response, cid);
 
   unsubscribe_from_event(event.id());
 

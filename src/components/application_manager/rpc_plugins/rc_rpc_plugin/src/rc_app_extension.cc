@@ -151,12 +151,21 @@ void RCAppExtension::ProcessResumption(
     resumption::Subscriber subscriber) {
   LOG4CXX_AUTO_TRACE(logger_);
 
-  if (!saved_app.keyExists(message_params::kModuleData)) {
-    LOG4CXX_ERROR(logger_, "kModuleData section does not exist");
+  if (!saved_app.keyExists(
+          application_manager::strings::application_subscriptions)) {
+    LOG4CXX_DEBUG(logger_, "application_subscriptions section is not exists");
     return;
   }
 
-  auto& module_data = saved_app[message_params::kModuleData];
+  const smart_objects::SmartObject& resumption_data =
+      saved_app[application_manager::strings::application_subscriptions];
+
+  if (!resumption_data.keyExists(message_params::kModuleData)) {
+    LOG4CXX_DEBUG(logger_, "kModuleData section does not exist");
+    return;
+  }
+
+  auto& module_data = resumption_data[message_params::kModuleData];
 
   const auto lenght = module_data.length();
 
