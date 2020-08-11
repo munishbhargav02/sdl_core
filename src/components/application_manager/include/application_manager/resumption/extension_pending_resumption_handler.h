@@ -53,10 +53,6 @@ class ExtensionPendingResumptionHandler
 
   virtual ~ExtensionPendingResumptionHandler() {}
 
-  // EventObserver interface
-  virtual void on_event(
-      const application_manager::event_engine::Event& event) = 0;
-
   /**
    * @brief HandleResumptionSubscriptionRequest handles all subscriptions
    * requests, which might be send to HMI under certain conditions
@@ -72,6 +68,7 @@ class ExtensionPendingResumptionHandler
   virtual void ClearPendingResumptionRequests() = 0;
 
  protected:
+  
   /**
    * @brief MakeResumptionRequest creates resumption request
    * @param corr_id correlation ID
@@ -79,7 +76,7 @@ class ExtensionPendingResumptionHandler
    * @param message Message to HMI
    * @return instance of ResumptionRequest class
    */
-  virtual ResumptionRequest MakeResumptionRequest(
+  ResumptionRequest MakeResumptionRequest(
       const uint32_t corr_id,
       const hmi_apis::FunctionID::eType function_id,
       const smart_objects::SmartObject& message);
