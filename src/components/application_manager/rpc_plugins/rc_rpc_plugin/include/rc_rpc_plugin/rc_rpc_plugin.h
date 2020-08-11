@@ -114,6 +114,13 @@ class RCRPCPlugin : public plugins::RPCPlugin {
                                      RCAppExtension& ext,
                                      resumption::Subscriber subscriber);
 
+  /**
+   * @brief Reverts resumption data, clears all pending resumption and sends
+   * ubsubscribe vehicle data request to a HMI
+   * @param subscriptions Module data that SDL should unsubscribe off
+   */
+  void RevertResumption(const std::set<ModuleUid>& subscriptions);
+
   static const uint32_t kRCPluginID = 153;
 
   typedef std::vector<application_manager::ApplicationSharedPtr> Apps;

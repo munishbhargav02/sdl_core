@@ -173,6 +173,22 @@ void RCRPCPlugin::ProcessResumptionSubscription(
       ext, subscriber, app);
 }
 
+void RCRPCPlugin::RevertResumption(const std::set<ModuleUid>& subscriptions) {
+  LOG4CXX_AUTO_TRACE(logger_);
+
+  pending_resumption_handler_->ClearPendingResumptionRequests();
+
+  for (const auto& module : subscriptions) {
+    auto unsubscribe_request = RCHelpers::CreateUnsubscribeRequestToHMI(
+        module, app_mngr_->GetNextHMICorrelationID());
+
+    LOG4CXX_DEBUG(logger_,
+                  "Send Unsubscribe from module type: "
+                      << module.first << " id: " << module.second);
+    rpc_service_->ManageHMICommand(unsubscribe_request);
+  }
+}
+
 RCRPCPlugin::Apps RCRPCPlugin::GetRCApplications(
     application_manager::ApplicationManager& app_mngr) {
   using application_manager::ApplicationSet;
