@@ -82,9 +82,8 @@ void SDLPendingResumptionHandler::ClearPendingResumptionRequests() {
         freezed_resumption.request_to_send_.message);
     const uint32_t cid =
         (*request)[strings::params][strings::correlation_id].asUInt();
-    const hmi_apis::FunctionID::eType fid =
-        static_cast<hmi_apis::FunctionID::eType>(
-            (*request)[strings::params][strings::function_id].asInt());
+    const auto fid = static_cast<hmi_apis::FunctionID::eType>(
+        (*request)[strings::params][strings::function_id].asInt());
     LOG4CXX_DEBUG(logger_,
                   "Subscribing for event with function id: "
                       << fid << " correlation id: " << cid);
