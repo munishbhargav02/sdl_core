@@ -4346,6 +4346,9 @@ ApplicationManagerImpl::CreateAllAppGlobalPropsIDList(
   if (application->vr_help_title()) {
     (*global_properties)[i++] = GlobalProperty::VRHELPTITLE;
   }
+  if (application->vr_help()) {
+    (*global_properties)[i++] = GlobalProperty::VRHELPITEMS;
+  }
   if (application->menu_title()) {
     (*global_properties)[i++] = GlobalProperty::MENUNAME;
   }

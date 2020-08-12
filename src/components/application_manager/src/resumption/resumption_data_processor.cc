@@ -632,13 +632,33 @@ void ResumptionDataProcessor::DeleteCommands(ApplicationSharedPtr application) {
         strings::vr_commands);
   };
 
+  auto extract_cmd_id =
+      [](const smart_objects::SmartObject* const so_ptr) -> uint32_t {
+    if (so_ptr->keyExists(strings::cmd_id)) {
+      return so_ptr->getElement(strings::cmd_id).asUInt();
+    }
+
+    return 0;
+  };
+
   auto accessor = application->commands_map();
   const auto& commands_map = accessor.GetData();
 
   for (const auto& cmd : commands_map) {
-    auto failed_command =
-        FindCommandResumptionRequest(cmd.first, failed_requests);
+    const auto cmd_id = extract_cmd_id(cmd.second);
+    if (0 == cmd_id) {
+      LOG4CXX_ERROR(logger_,
+                    "Can't extract cmd_id for command with internal number: "
+                        << cmd.first);
+      continue;
+    }
 
+    auto failed_command = FindCommandResumptionRequest(cmd_id, failed_requests);
+
+    LOG4CXX_DEBUG(logger_,
+                  std::boolalpha << "Command with internal ID: " << cmd.first
+                                 << " and cmdID: " << cmd_id << " was failed: "
+                                 << static_cast<bool>(failed_command));
     if (!failed_command || (!is_vr_command_failed(*failed_command))) {
       auto delete_VR_command_msg = MessageHelper::CreateDeleteVRCommandRequest(
           cmd.second,
@@ -647,6 +667,7 @@ void ResumptionDataProcessor::DeleteCommands(ApplicationSharedPtr application) {
       application_manager_.GetRPCService().ManageHMICommand(
           delete_VR_command_msg);
     }
+
     if (!failed_command || (is_vr_command_failed(*failed_command))) {
       auto delete_UI_command_msg = MessageHelper::CreateDeleteUICommandRequest(
           cmd.second,
@@ -656,8 +677,8 @@ void ResumptionDataProcessor::DeleteCommands(ApplicationSharedPtr application) {
           delete_UI_command_msg);
     }
 
-    application->RemoveCommand(cmd.first);
-    application->help_prompt_manager().OnVrCommandDeleted(cmd.first, true);
+    application->RemoveCommand(cmd_id);
+    application->help_prompt_manager().OnVrCommandDeleted(cmd_id, true);
   }
 }
 
