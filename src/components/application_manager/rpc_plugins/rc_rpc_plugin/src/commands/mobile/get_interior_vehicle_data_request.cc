@@ -132,9 +132,8 @@ void GetInteriorVehicleDataRequest::ProcessResponseToMobileFromCache(
       const bool is_app_already_subscribed =
           extension->IsSubscribedToInteriorVehicleData(module);
       if (is_app_already_subscribed) {
-        response_msg_params
-            [app_mngr::strings::msg_params][app_mngr::strings::info] =
-                "App is already subscribed to the provided module";
+        response_msg_params[app_mngr::strings::info] =
+            "App is already subscribed to the provided module";
         result_code = mobile_apis::Result::WARNINGS;
       } else {
         extension->SubscribeToInteriorVehicleData(module);
