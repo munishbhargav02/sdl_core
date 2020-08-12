@@ -125,14 +125,38 @@ class ResumptionDataProcessor : public app_mngr::event_engine::EventObserver {
                        const hmi_apis::FunctionID::eType);
 
  private:
+  /**
+   * @brief GetAppIdByRequestId returns application ID, which corresponds to
+   * function ID and correlation ID from event
+   * @param function_id Function ID
+   * @param corr_id Correlation ID
+   * @return optional object, which contains application ID, or empty optional,
+   * if such ID wasn't found
+   */
   utils::Optional<uint32_t> GetAppIdByRequestId(
       const hmi_apis::FunctionID::eType function_id, const int32_t corr_id);
 
+  /**
+   * @brief GetRequest returns ResumptionRequest, which corresponds to
+   * function ID and correlation ID from event
+   * @param app_id ID of application, related to event
+   * @param function_id Function ID
+   * @param corr_id Correlation ID
+   * @return optional object, which contains application ID, or empty optional,
+   * if such ID wasn't found
+   */
   std::vector<ResumptionRequest>::iterator GetRequest(
       const uint32_t app_id,
       const hmi_apis::FunctionID::eType function_id,
       const int32_t corr_id);
 
+  /**
+   * @brief GetResumptionCallback returns ResumptionCallBack, which was stored
+   * for application, related to event
+   * @param app_id ID of application, related to event
+   * @return optional object, which contains callback, or empty optional,
+   * if callback wasn't found for such application ID
+   */
   utils::Optional<ResumeCtrl::ResumptionCallBack> GetResumptionCallback(
       const uint32_t app_id);
 
