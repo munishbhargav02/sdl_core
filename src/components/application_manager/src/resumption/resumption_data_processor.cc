@@ -288,7 +288,7 @@ void ResumptionDataProcessor::ProcessResponseFromHMI(
 
   const bool successful_resumption =
       status.error_requests.empty() &&
-      status.unsuccesfull_vehicle_data_subscriptions_.empty();
+      status.unsuccessful_vehicle_data_subscriptions_.empty();
 
   resumption_status_lock_.Release();
 
@@ -933,7 +933,7 @@ void ResumptionDataProcessor::DeletePluginsSubscriptions(
 
   const ApplicationResumptionStatus& status = it->second;
   smart_objects::SmartObject extension_subscriptions;
-  for (auto ivi : status.succesfull_vehicle_data_subscriptions_) {
+  for (auto ivi : status.successful_vehicle_data_subscriptions_) {
     LOG4CXX_DEBUG(logger_, "ivi " << ivi << " should be deleted");
     extension_subscriptions[ivi] = true;
   }
@@ -961,7 +961,7 @@ void ResumptionDataProcessor::CheckVehicleDataResponse(
   if (!IsResponseSuccessful(response)) {
     LOG4CXX_TRACE(logger_, "Vehicle data request not succesfull");
     for (const auto key : request_keys) {
-      status.unsuccesfull_vehicle_data_subscriptions_.push_back(key);
+      status.unsuccessful_vehicle_data_subscriptions_.push_back(key);
     }
     return;
   }
@@ -979,10 +979,10 @@ void ResumptionDataProcessor::CheckVehicleDataResponse(
       LOG4CXX_TRACE(logger_,
                     "ivi " << ivi << " was NOT successfuly subscribed");
 
-      status.unsuccesfull_vehicle_data_subscriptions_.push_back(ivi);
+      status.unsuccessful_vehicle_data_subscriptions_.push_back(ivi);
     } else {
       LOG4CXX_TRACE(logger_, "ivi " << ivi << " was successfuly subscribed");
-      status.succesfull_vehicle_data_subscriptions_.push_back(ivi);
+      status.successful_vehicle_data_subscriptions_.push_back(ivi);
     }
   }
 }

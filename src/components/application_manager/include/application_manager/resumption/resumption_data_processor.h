@@ -41,6 +41,10 @@ namespace resumption {
 
 namespace app_mngr = application_manager;
 
+/**
+ * @brief The ResumptionRequestIDs struct contains fields, needed during
+ * processing events, related to responses from HMI to each resumption request
+ */
 struct ResumptionRequestIDs {
   hmi_apis::FunctionID::eType function_id;
   int32_t correlation_id;
@@ -52,17 +56,25 @@ struct ResumptionRequestIDs {
   bool operator<(const ResumptionRequestIDs& other) const;
 };
 
+/**
+ * @brief The ResumptionRequest struct contains information, needed for
+ * processing event, and request message
+ */
 struct ResumptionRequest {
   ResumptionRequestIDs request_ids;
   smart_objects::SmartObject message;
 };
 
+/**
+ * @brief ApplicationResumptionStatus contains information about all requests,
+ * which was sent, and results of this operation
+ */
 struct ApplicationResumptionStatus {
   std::vector<ResumptionRequest> list_of_sent_requests;
   std::vector<ResumptionRequest> error_requests;
   std::vector<ResumptionRequest> successful_requests;
-  std::vector<std::string> unsuccesfull_vehicle_data_subscriptions_;
-  std::vector<std::string> succesfull_vehicle_data_subscriptions_;
+  std::vector<std::string> unsuccessful_vehicle_data_subscriptions_;
+  std::vector<std::string> successful_vehicle_data_subscriptions_;
 };
 
 /**
@@ -286,6 +298,14 @@ class ResumptionDataProcessor : public app_mngr::event_engine::EventObserver {
   app_mngr::ButtonSubscriptions GetButtonSubscriptionsToResume(
       app_mngr::ApplicationSharedPtr application) const;
 
+  /**
+   * @brief Checks whether SubscribeVehicleData response successful or not and
+   * handles it
+   * @param request reference to request SO
+   * @param response reference to response SO
+   * @param status reference to struct, which stores informaion about successful
+   * and unsuccessful subscriptions to vehicle data
+   */
   void CheckVehicleDataResponse(const smart_objects::SmartObject& request,
                                 const smart_objects::SmartObject& response,
                                 ApplicationResumptionStatus& status);
