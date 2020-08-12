@@ -184,13 +184,8 @@ bool ResumptionRequestIDs::operator<(const ResumptionRequestIDs& other) const {
          function_id < other.function_id;
 }
 
-void ResumptionDataProcessor::ProcessResponseFromHMI(
-    const smart_objects::SmartObject& response,
-    const hmi_apis::FunctionID::eType function_id,
-    const int32_t corr_id) {
-  ResumptionRequestIDs request_ids;
-  request_ids.function_id = function_id;
-  request_ids.correlation_id = corr_id;
+utils::Optional<uint32_t> ResumptionDataProcessor::GetAppIdByRequestId(
+    const hmi_apis::FunctionID::eType function_id, const int32_t corr_id) {
   auto predicate =
       [function_id,
        corr_id](const std::pair<ResumptionRequestIDs, std::uint32_t>& item) {
@@ -198,7 +193,7 @@ void ResumptionDataProcessor::ProcessResponseFromHMI(
                item.first.correlation_id == corr_id;
       };
 
-  request_app_ids_lock_.AcquireForReading();
+  sync_primitives::AutoReadLock lock(request_app_ids_lock_);
   auto app_id_ptr =
       std::find_if(request_app_ids_.begin(), request_app_ids_.end(), predicate);
 
@@ -207,38 +202,26 @@ void ResumptionDataProcessor::ProcessResponseFromHMI(
                   "application id for correlation id "
                       << corr_id << " and function id: " << function_id
                       << " was not found.");
-    request_app_ids_lock_.Release();
-    return;
+    return utils::Optional<uint32_t>::OptionalEmpty::EMPTY;
   }
+  return utils::Optional<uint32_t>(app_id_ptr->second);
+}
 
-  const uint32_t app_id = app_id_ptr->second;
-  request_app_ids_lock_.Release();
+std::vector<ResumptionRequest>::iterator ResumptionDataProcessor::GetRequest(
+    const uint32_t app_id,
+    const hmi_apis::FunctionID::eType function_id,
+    const int32_t corr_id) {
+  sync_primitives::AutoWriteLock lock(resumption_status_lock_);
+  std::vector<ResumptionRequest>& list_of_sent_requests =
+      resumption_status_[app_id].list_of_sent_requests;
 
-  LOG4CXX_DEBUG(logger_, "app_id is: " << app_id);
-
-  LOG4CXX_DEBUG(logger_,
-                "Found function id: " << app_id_ptr->first.function_id
-                                      << " correlation id: "
-                                      << app_id_ptr->first.correlation_id);
-
-  LOG4CXX_DEBUG(logger_,
-                "Now processing event with function id: "
-                    << request_ids.function_id
-                    << " correlation id: " << request_ids.correlation_id);
-
-  resumption_status_lock_.AcquireForWriting();
   if (resumption_status_.find(app_id) == resumption_status_.end()) {
     LOG4CXX_ERROR(logger_,
                   "No resumption status info found for app_id: " << app_id);
-    resumption_status_lock_.Release();
-    return;
+    return list_of_sent_requests.end();
   }
 
-  ApplicationResumptionStatus& status = resumption_status_[app_id];
-  std::vector<ResumptionRequest>& list_of_sent_requests =
-      status.list_of_sent_requests;
-
-  auto request_ptr =
+  auto request_iter =
       std::find_if(list_of_sent_requests.begin(),
                    list_of_sent_requests.end(),
                    [function_id, corr_id](const ResumptionRequest& request) {
@@ -246,28 +229,64 @@ void ResumptionDataProcessor::ProcessResponseFromHMI(
                             request.request_ids.function_id == function_id;
                    });
 
-  if (list_of_sent_requests.end() == request_ptr) {
+  return request_iter;
+}
+
+utils::Optional<ResumeCtrl::ResumptionCallBack>
+ResumptionDataProcessor::GetResumptionCallback(const uint32_t app_id) {
+  sync_primitives::AutoReadLock lock(register_callbacks_lock_);
+  auto it = register_callbacks_.find(app_id);
+  if (it == register_callbacks_.end()) {
+    LOG4CXX_WARN(logger_, "Callback for app_id: " << app_id << " not found");
+    return utils::Optional<
+        ResumeCtrl::ResumptionCallBack>::OptionalEmpty::EMPTY;
+  }
+
+  return utils::Optional<ResumeCtrl::ResumptionCallBack>(it->second);
+}
+
+void ResumptionDataProcessor::ProcessResponseFromHMI(
+    const smart_objects::SmartObject& response,
+    const hmi_apis::FunctionID::eType function_id,
+    const int32_t corr_id) {
+  auto found_app_id = GetAppIdByRequestId(function_id, corr_id);
+  if (!found_app_id) {
+    return;
+  }
+  const uint32_t app_id = *found_app_id;
+  LOG4CXX_DEBUG(logger_, "app_id is: " << app_id);
+
+  LOG4CXX_DEBUG(logger_,
+                "Now processing event with function id: "
+                    << function_id << " correlation id: " << corr_id);
+
+  auto request = GetRequest(app_id, function_id, corr_id);
+
+  resumption_status_lock_.AcquireForWriting();
+  ApplicationResumptionStatus& status = resumption_status_[app_id];
+  auto& list_of_sent_requests =
+      resumption_status_[app_id].list_of_sent_requests;
+
+  if (list_of_sent_requests.end() == request) {
     LOG4CXX_ERROR(logger_, "Request not found");
-    resumption_status_lock_.Release();
     return;
   }
 
   if (IsResponseSuccessful(response)) {
-    status.successful_requests.push_back(*request_ptr);
+    status.successful_requests.push_back(*request);
   } else {
-    status.error_requests.push_back(*request_ptr);
+    status.error_requests.push_back(*request);
   }
 
-  if (hmi_apis::FunctionID::VehicleInfo_SubscribeVehicleData ==
-      request_ids.function_id) {
-    CheckVehicleDataResponse(request_ptr->message, response, status);
+  if (hmi_apis::FunctionID::VehicleInfo_SubscribeVehicleData == function_id) {
+    CheckVehicleDataResponse(request->message, response, status);
   }
 
-  if (hmi_apis::FunctionID::UI_CreateWindow == request_ids.function_id) {
-    CheckCreateWindowResponse(request_ptr->message, response);
+  if (hmi_apis::FunctionID::UI_CreateWindow == function_id) {
+    CheckCreateWindowResponse(request->message, response);
   }
 
-  list_of_sent_requests.erase(request_ptr);
+  list_of_sent_requests.erase(request);
 
   if (!list_of_sent_requests.empty()) {
     LOG4CXX_DEBUG(logger_,
@@ -284,21 +303,15 @@ void ResumptionDataProcessor::ProcessResponseFromHMI(
 
   resumption_status_lock_.Release();
 
-  register_callbacks_lock_.AcquireForReading();
-  auto it = register_callbacks_.find(app_id);
-  if (it == register_callbacks_.end()) {
-    LOG4CXX_WARN(logger_, "Callback for app_id: " << app_id << " not found");
-
-    register_callbacks_lock_.Release();
+  auto found_callback = GetResumptionCallback(app_id);
+  if (!found_callback) {
     return;
   }
-
-  auto callback = it->second;
-  register_callbacks_lock_.Release();
+  auto callback = *found_callback;
 
   if (successful_resumption) {
     LOG4CXX_DEBUG(logger_, "Resumption for app " << app_id << " successful");
-    callback(mobile_apis::Result::SUCCESS, "Data resumption succesful");
+    callback(mobile_apis::Result::SUCCESS, "Data resumption successful");
     application_manager_.state_controller().ResumePostponedWindows(app_id);
   }
 
@@ -309,17 +322,14 @@ void ResumptionDataProcessor::ProcessResponseFromHMI(
     application_manager_.state_controller().DropPostponedWindows(app_id);
   }
 
-  resumption_status_lock_.AcquireForWriting();
+  sync_primitives::AutoWriteLock status_lock(resumption_status_lock_);
   resumption_status_.erase(app_id);
-  resumption_status_lock_.Release();
 
-  request_app_ids_lock_.AcquireForWriting();
-  request_app_ids_.erase(app_id_ptr);
-  request_app_ids_lock_.Release();
+  sync_primitives::AutoWriteLock app_ids_lock(request_app_ids_lock_);
+  request_app_ids_.erase({function_id, corr_id});
 
-  register_callbacks_lock_.AcquireForWriting();
+  sync_primitives::AutoWriteLock callbacks_lock(register_callbacks_lock_);
   register_callbacks_.erase(app_id);
-  register_callbacks_lock_.Release();
 }
 
 void ResumptionDataProcessor::HandleOnTimeOut(

@@ -125,6 +125,17 @@ class ResumptionDataProcessor : public app_mngr::event_engine::EventObserver {
                        const hmi_apis::FunctionID::eType);
 
  private:
+  utils::Optional<uint32_t> GetAppIdByRequestId(
+      const hmi_apis::FunctionID::eType function_id, const int32_t corr_id);
+
+  std::vector<ResumptionRequest>::iterator GetRequest(
+      const uint32_t app_id,
+      const hmi_apis::FunctionID::eType function_id,
+      const int32_t corr_id);
+
+  utils::Optional<ResumeCtrl::ResumptionCallBack> GetResumptionCallback(
+      const uint32_t app_id);
+
   /**
    * @brief Processes response message from HMI
    * @param response reference to response message
