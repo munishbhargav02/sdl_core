@@ -207,7 +207,7 @@ utils::Optional<uint32_t> ResumptionDataProcessor::GetAppIdByRequestId(
   return utils::Optional<uint32_t>(app_id_ptr->second);
 }
 
-std::vector<ResumptionRequest>::iterator ResumptionDataProcessor::GetRequest(
+utils::Optional<ResumptionRequest> ResumptionDataProcessor::GetRequest(
     const uint32_t app_id,
     const hmi_apis::FunctionID::eType function_id,
     const int32_t corr_id) {
@@ -218,7 +218,7 @@ std::vector<ResumptionRequest>::iterator ResumptionDataProcessor::GetRequest(
   if (resumption_status_.find(app_id) == resumption_status_.end()) {
     LOG4CXX_ERROR(logger_,
                   "No resumption status info found for app_id: " << app_id);
-    return list_of_sent_requests.end();
+    return utils::Optional<ResumptionRequest>::OptionalEmpty::EMPTY;
   }
 
   auto request_iter =
@@ -229,7 +229,11 @@ std::vector<ResumptionRequest>::iterator ResumptionDataProcessor::GetRequest(
                             request.request_ids.function_id == function_id;
                    });
 
-  return request_iter;
+  if (list_of_sent_requests.end() == request_iter) {
+    LOG4CXX_ERROR(logger_, "Request not found");
+    return utils::Optional<ResumptionRequest>::OptionalEmpty::EMPTY;
+  }
+  return utils::Optional<ResumptionRequest>(*request_iter);
 }
 
 utils::Optional<ResumeCtrl::ResumptionCallBack>
@@ -241,7 +245,6 @@ ResumptionDataProcessor::GetResumptionCallback(const uint32_t app_id) {
     return utils::Optional<
         ResumeCtrl::ResumptionCallBack>::OptionalEmpty::EMPTY;
   }
-
   return utils::Optional<ResumeCtrl::ResumptionCallBack>(it->second);
 }
 
@@ -260,33 +263,39 @@ void ResumptionDataProcessor::ProcessResponseFromHMI(
                 "Now processing event with function id: "
                     << function_id << " correlation id: " << corr_id);
 
-  auto request = GetRequest(app_id, function_id, corr_id);
+  auto found_request = GetRequest(app_id, function_id, corr_id);
+  if (!found_request) {
+    return;
+  }
+  auto request = *found_request;
 
   resumption_status_lock_.AcquireForWriting();
   ApplicationResumptionStatus& status = resumption_status_[app_id];
   auto& list_of_sent_requests =
       resumption_status_[app_id].list_of_sent_requests;
 
-  if (list_of_sent_requests.end() == request) {
-    LOG4CXX_ERROR(logger_, "Request not found");
-    return;
-  }
-
   if (IsResponseSuccessful(response)) {
-    status.successful_requests.push_back(*request);
+    status.successful_requests.push_back(request);
   } else {
-    status.error_requests.push_back(*request);
+    status.error_requests.push_back(request);
   }
 
   if (hmi_apis::FunctionID::VehicleInfo_SubscribeVehicleData == function_id) {
-    CheckVehicleDataResponse(request->message, response, status);
+    CheckVehicleDataResponse(request.message, response, status);
   }
 
   if (hmi_apis::FunctionID::UI_CreateWindow == function_id) {
-    CheckCreateWindowResponse(request->message, response);
+    CheckCreateWindowResponse(request.message, response);
   }
 
-  list_of_sent_requests.erase(request);
+  auto request_iter =
+      std::find_if(list_of_sent_requests.begin(),
+                   list_of_sent_requests.end(),
+                   [function_id, corr_id](const ResumptionRequest& request) {
+                     return request.request_ids.correlation_id == corr_id &&
+                            request.request_ids.function_id == function_id;
+                   });
+  list_of_sent_requests.erase(request_iter);
 
   if (!list_of_sent_requests.empty()) {
     LOG4CXX_DEBUG(logger_,

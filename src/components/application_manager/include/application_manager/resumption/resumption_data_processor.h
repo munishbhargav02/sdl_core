@@ -142,10 +142,10 @@ class ResumptionDataProcessor : public app_mngr::event_engine::EventObserver {
    * @param app_id ID of application, related to event
    * @param function_id Function ID
    * @param corr_id Correlation ID
-   * @return optional object, which contains application ID, or empty optional,
-   * if such ID wasn't found
+   * @return optional object, which contains resumption request, or empty
+   * optional, if such request wasn't found
    */
-  std::vector<ResumptionRequest>::iterator GetRequest(
+  utils::Optional<ResumptionRequest> GetRequest(
       const uint32_t app_id,
       const hmi_apis::FunctionID::eType function_id,
       const int32_t corr_id);
