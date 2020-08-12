@@ -416,16 +416,12 @@ smart_objects::SmartObjectSPtr DynamicApplicationDataImpl::display_capabilities(
   const auto window_caps =
       (*display_capabilities_)[0][strings::window_capabilities].asArray();
   if (window_caps) {
-    auto find_res =
-        std::find_if(window_caps->begin(),
-                     window_caps->end(),
-                     [&window_id](const smart_objects::SmartObject& element) {
-                       if (window_id == element[strings::window_id].asInt()) {
-                         return true;
-                       }
-
-                       return false;
-                     });
+    auto find_res = std::find_if(
+        window_caps->begin(),
+        window_caps->end(),
+        [&window_id](const smart_objects::SmartObject& element) {
+          return (window_id == element[strings::window_id].asInt());
+        });
 
     if (find_res != window_caps->end()) {
       result_window_caps = *find_res;
