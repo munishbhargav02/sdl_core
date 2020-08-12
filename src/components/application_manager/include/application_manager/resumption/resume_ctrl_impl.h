@@ -163,12 +163,6 @@ class ResumeCtrlImpl : public ResumeCtrl {
    */
   void StopRestoreHmiLevelTimer();
 
-  /**
-   * @brief Start timer for resumption applications
-   *        Restore D1-D5 data
-   * @param application that is need to be restored
-   * @return true if it was saved, otherwise return false
-   */
   bool StartResumption(app_mngr::ApplicationSharedPtr application,
                        const std::string& hash,
                        ResumptionCallBack callback) OVERRIDE;
@@ -176,12 +170,6 @@ class ResumeCtrlImpl : public ResumeCtrl {
   void HandleOnTimeOut(const uint32_t correlation_id,
                        const hmi_apis::FunctionID::eType) OVERRIDE;
 
-  /**
-   * @brief Start timer for resumption applications
-   *        Does not restore D1-D5 data
-   * @param application that is need to be restored
-   * @return true if it was saved, otherwise return false
-   */
   bool StartResumptionOnlyHMILevel(
       app_mngr::ApplicationSharedPtr application) OVERRIDE;
 

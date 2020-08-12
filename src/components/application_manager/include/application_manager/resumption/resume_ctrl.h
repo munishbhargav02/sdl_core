@@ -59,8 +59,8 @@ class ResumeCtrl {
   virtual ~ResumeCtrl() {}
 
   /**
-   * @brief ResumptionCallBack Function signature to be called whe
-   * DataResumptionFinished
+   * @brief ResumptionCallBack Function signature to be called when
+   * data resumption will be finished
    * @param result_code result code for sending to mobile
    * @param info additional info for sending to mobile
    */
@@ -168,6 +168,9 @@ class ResumeCtrl {
    * @brief Start timer for resumption applications
    *        Restore D1-D5 data
    * @param application that is need to be restored
+   * @param hash stored hash value for this app
+   * @param callback Function signature to be called when
+   * data resumption will be finished
    * @return true if it was saved, otherwise return false
    */
   virtual bool StartResumption(app_mngr::ApplicationSharedPtr application,
@@ -209,6 +212,7 @@ class ResumeCtrl {
   /**
    * @brief Check application hash
    * @param application that is need to be restored
+   * @param hash stored hash value to be checked for restoring application
    * @return true if it was saved, otherwise return false
    */
   virtual bool CheckApplicationHash(app_mngr::ApplicationSharedPtr application,
