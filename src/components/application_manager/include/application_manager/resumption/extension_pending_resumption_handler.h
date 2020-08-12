@@ -66,9 +66,8 @@ class ExtensionPendingResumptionHandler
       application_manager::Application& app) = 0;
 
   /**
-   * @brief OnResumptionRevert is responsible for performing a second attempt to
-   * subscribe from the other applications in the case, when
-   * this subscription was failed for the current application.
+   * @brief OnResumptionRevert is callback to be called in the case, when
+   * resumption is failed for current application.
    */
   virtual void OnResumptionRevert() = 0;
 
