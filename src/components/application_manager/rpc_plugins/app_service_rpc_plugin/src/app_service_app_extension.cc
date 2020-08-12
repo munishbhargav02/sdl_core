@@ -87,12 +87,11 @@ AppServiceSubscriptions AppServiceAppExtension::Subscriptions() {
 
 void AppServiceAppExtension::SaveResumptionData(
     smart_objects::SmartObject& resumption_data) {
-  const char* app_service_info = "appService";
-  resumption_data[app_service_info] =
+  resumption_data[app_mngr::hmi_interface::app_service] =
       smart_objects::SmartObject(smart_objects::SmartType_Array);
   int i = 0;
   for (const auto& subscription : subscribed_data_) {
-    resumption_data[app_service_info][i] = subscription;
+    resumption_data[app_mngr::hmi_interface::app_service][i] = subscription;
     i++;
   }
 }
@@ -107,10 +106,9 @@ void AppServiceAppExtension::ProcessResumption(
   const auto& subscriptions =
       saved_app[application_manager::strings::application_subscriptions];
 
-  const char* app_service_info = "appService";
-  if (subscriptions.keyExists(app_service_info)) {
+  if (subscriptions.keyExists(app_mngr::hmi_interface::app_service)) {
     const smart_objects::SmartObject& subscriptions_app_services =
-        subscriptions[app_service_info];
+        subscriptions[app_mngr::hmi_interface::app_service];
     for (size_t i = 0; i < subscriptions_app_services.length(); ++i) {
       std::string service_type = subscriptions_app_services[i].asString();
       SubscribeToAppService(service_type);

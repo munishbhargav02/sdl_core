@@ -1,9 +1,12 @@
 #include "sdl_rpc_plugin/extensions/system_capability_app_extension.h"
+#include "application_manager/smart_object_keys.h"
 
 namespace sdl_rpc_plugin {
 CREATE_LOGGERPTR_GLOBAL(logger_, "GetSystemCapabilitiesAppExtension")
 
 namespace app_mngr_ = application_manager;
+namespace strings = app_mngr::strings;
+
 const app_mngr_::AppExtensionUID
     SystemCapabilityAppExtension::SystemCapabilityAppExtensionUID = 200;
 
@@ -55,14 +58,13 @@ SystemCapabilitySubscriptions SystemCapabilityAppExtension::Subscriptions() {
 void SystemCapabilityAppExtension::SaveResumptionData(
     smart_objects::SmartObject& resumption_data) {
   LOG4CXX_AUTO_TRACE(logger_);
-  const char* application_system_capability = "systemCapability";
 
-  resumption_data[application_system_capability] =
+  resumption_data[strings::system_capability] =
       smart_objects::SmartObject(smart_objects::SmartType_Array);
 
   int i = 0;
   for (const auto& subscription : subscribed_data_) {
-    resumption_data[application_system_capability][i] = subscription;
+    resumption_data[strings::system_capability][i] = subscription;
     i++;
   }
 }
@@ -77,10 +79,9 @@ void SystemCapabilityAppExtension::ProcessResumption(
   const smart_objects::SmartObject& subscriptions =
       saved_app[application_manager::strings::application_subscriptions];
 
-  const char* application_system_capability = "systemCapability";
-  if (saved_app.keyExists(application_system_capability)) {
+  if (saved_app.keyExists(strings::system_capability)) {
     const auto& system_capability_subscriptions =
-        subscriptions[application_system_capability];
+        subscriptions[strings::system_capability];
     for (size_t i = 0; i < system_capability_subscriptions.length(); ++i) {
       SystemCapabilityType capability_type = static_cast<SystemCapabilityType>(
           (system_capability_subscriptions[i]).asInt());

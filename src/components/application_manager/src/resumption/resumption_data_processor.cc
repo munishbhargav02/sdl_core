@@ -159,18 +159,13 @@ bool ResumptionDataProcessor::HasSubscriptionsToRestore(
   const bool has_waypoints_subscriptions =
       subscriptions[strings::subscribed_for_way_points].asBool();
 
-  bool has_appservice_subscriptions = false;
-  const char* app_service_info = "appService";
-  if (subscriptions.keyExists(app_service_info)) {
-    has_appservice_subscriptions = !subscriptions[app_service_info].empty();
-  }
+  const bool has_appservice_subscriptions =
+      subscriptions.keyExists(app_mngr::hmi_interface::app_service) &&
+      !subscriptions[app_mngr::hmi_interface::app_service].empty();
 
-  bool has_system_capability_subscriptions = false;
-  const char* application_system_capability = "systemCapability";
-  if (subscriptions.keyExists(application_system_capability)) {
-    has_system_capability_subscriptions =
-        !subscriptions[application_system_capability].empty();
-  }
+  const bool has_system_capability_subscriptions =
+      subscriptions.keyExists(strings::system_capability) &&
+      !subscriptions[strings::system_capability].empty();
 
   const bool has_subscriptions_to_restore =
       has_ivi_subscriptions || has_button_subscriptions ||
@@ -196,9 +191,6 @@ void ResumptionDataProcessor::ProcessResponseFromHMI(
   ResumptionRequestIDs request_ids;
   request_ids.function_id = function_id;
   request_ids.correlation_id = corr_id;
-  // TODO i suppose it can be optimised with moving app id into
-  // ResumptionRequest struct, so that we don't have to perform
-  // basically the same search twice
   auto predicate =
       [function_id,
        corr_id](const std::pair<ResumptionRequestIDs, std::uint32_t>& item) {

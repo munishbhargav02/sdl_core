@@ -40,7 +40,8 @@ namespace {
 const std::string kAppServiceType1 = "AppServiceType1";
 const std::string kAppServiceType2 = "AppServiceType2";
 const std::string kResumptionDataKey = "kResumptionDataKey";
-const std::string kAppServiceInfoKey = "appService";
+const std::string kAppServiceInfoKey =
+    application_manager::hmi_interface::app_service;
 }  // namespace
 
 namespace test {
